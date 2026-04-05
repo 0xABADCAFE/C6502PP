@@ -1,0 +1,4 @@
+*.kdev*
+src/*.o
+src/test
+src/*.s
