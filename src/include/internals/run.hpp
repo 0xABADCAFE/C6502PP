@@ -19,6 +19,13 @@
 //#define dispatch() break;
 #define dispatch() ++iCount; goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
 
+#define initNZ() iNZResult = (iStatus & F_ZERO) ? 0 : ((iStatus & F_NEGATIVE)|1)
+
+#define updateNZ(expression) setNZ(iNZResult = (expression))
+
+#define ldb(addr) oOutside.readByte(addr)
+#define stb(addr, value) oOutside.writeByte(addr, value)
+
     size_t run() noexcept {
 
         alignas(NativeCacheLine) static uint16_t const aJumpTable[256] __attribute__((section(".text"))) = {
@@ -283,151 +290,278 @@
 
         size_t iCount = 0;
         Word iAddress;
-        Byte iValue, iCarry;
+        Byte iValue, iCarry, iNZResult;
 
+        initNZ();
         begin_interpreter:
         dispatch();
 
         // Ordering by typical code frequency
 
         // Load Accumulator
-        handle(LDA_IM)  updateNZ(
-            iAccumulator = oOutside.readByte(iProgramCounter + 1)
-        ); size(LDA_IM); dispatch();
+        handle(LDA_IM) {
+            updateNZ(iAccumulator = ldb(iProgramCounter + 1));
+            size(LDA_IM);
+            dispatch();
+        }
 
-        handle(LDA_ZP)  updateNZ(
-            iAccumulator = oOutside.readByte(addrZeroPageByte())
-        ); size(LDA_ZP);  dispatch();
+        handle(LDA_ZP) {
+            updateNZ(iAccumulator = ldb(addrZeroPageByte()));
+            size(LDA_ZP);
+            dispatch();
+        }
 
-        handle(LDA_ZPX) updateNZ(
-            iAccumulator = oOutside.readByte(addrZeroPageXByte())
-        ); size(LDA_ZPX);  dispatch();
+        handle(LDA_ZPX) {
+            updateNZ(iAccumulator = ldb(addrZeroPageXByte()));
+            size(LDA_ZPX);
+            dispatch();
+        }
 
-        handle(LDA_AB)  updateNZ(
-            iAccumulator = oOutside.readByte(addrAbsoluteByte())
-        ); size(LDA_AB);  dispatch();
+        handle(LDA_AB) {
+            updateNZ(iAccumulator = ldb(addrAbsoluteByte()));
+            size(LDA_AB);
+            dispatch();
+        }
 
-        handle(LDA_ABX) updateNZ(
-            iAccumulator = oOutside.readByte(addrAbsoluteXByte())
-        ); size(LDA_ABX);  dispatch();
+        handle(LDA_ABX) {
+            updateNZ(iAccumulator = ldb(addrAbsoluteXByte()));
+            size(LDA_ABX);
+            dispatch();
+        }
 
-        handle(LDA_ABY) updateNZ(
-            iAccumulator = oOutside.readByte(addrAbsoluteYByte())
-        ); size(LDA_ABY);  dispatch();
+        handle(LDA_ABY) {
+            updateNZ(iAccumulator = ldb(addrAbsoluteYByte()));
+            size(LDA_ABY);
+            dispatch();
+        }
 
-        handle(LDA_IX)  updateNZ(
-            iAccumulator = oOutside.readByte(addrPreIndexZeroPageXByte())
-        ); size(LDA_IX);  dispatch();
+        handle(LDA_IX) {
+            updateNZ(iAccumulator = ldb(addrPreIndexZeroPageXByte()));
+            size(LDA_IX);
+            dispatch();
+        }
 
-        handle(LDA_IY)  updateNZ(
-            iAccumulator = oOutside.readByte(addrPostIndexZeroPageYByte())
-        ); size(LDA_IY);  dispatch();
+        handle(LDA_IY) {
+            updateNZ(iAccumulator = ldb(addrPostIndexZeroPageYByte()));
+            size(LDA_IY);
+            dispatch();
+        }
 
         // Store Accumulator
-        handle(STA_ZP)  oOutside.writeByte(addrZeroPageByte(),  iAccumulator); size(STA_ZP); dispatch();
-        handle(STA_ZPX) oOutside.writeByte(addrZeroPageXByte(), iAccumulator); size(STA_ZPX); dispatch();
-        handle(STA_AB)  oOutside.writeByte(addrAbsoluteByte(),  iAccumulator); size(STA_AB); dispatch();
-        handle(STA_ABX) oOutside.writeByte(addrAbsoluteXByte(), iAccumulator); size(STA_ABX); dispatch();
-        handle(STA_ABY) oOutside.writeByte(addrAbsoluteYByte(), iAccumulator); size(STA_ABY); dispatch();
-        handle(STA_IX)  oOutside.writeByte(addrPreIndexZeroPageXByte(),  iAccumulator); size(STA_IX); dispatch();
-        handle(STA_IY)  oOutside.writeByte(addrPostIndexZeroPageYByte(), iAccumulator); size(STA_IY); dispatch();
+        handle(STA_ZP) {
+            stb(addrZeroPageByte(), iAccumulator);
+            size(STA_ZP);
+            dispatch();
+        }
+
+        handle(STA_ZPX) {
+            stb(addrZeroPageXByte(), iAccumulator);
+            size(STA_ZPX);
+            dispatch();
+        }
+
+        handle(STA_AB) {
+            stb(addrAbsoluteByte(),  iAccumulator);
+            size(STA_AB);
+            dispatch();
+        }
+
+        handle(STA_ABX) {
+            stb(addrAbsoluteXByte(), iAccumulator);
+            size(STA_ABX);
+            dispatch();
+        }
+
+        handle(STA_ABY) {
+            stb(addrAbsoluteYByte(), iAccumulator);
+            size(STA_ABY);
+            dispatch();
+        }
+
+        handle(STA_IX) {
+            stb(addrPreIndexZeroPageXByte(),  iAccumulator);
+            size(STA_IX);
+            dispatch();
+        }
+
+        handle(STA_IY) {
+            stb(addrPostIndexZeroPageYByte(), iAccumulator);
+            size(STA_IY);
+            dispatch();
+        }
 
         // Load X
-        handle(LDX_IM)  updateNZ(iXIndex = oOutside.readByte(iProgramCounter + 1)); size(LDX_IM); dispatch();
-        handle(LDX_ZP)  updateNZ(iXIndex = oOutside.readByte(addrZeroPageByte()));  size(LDX_ZP);  dispatch();
-        handle(LDX_ZPY) updateNZ(iXIndex = oOutside.readByte(addrZeroPageYByte())); size(LDX_ZPY); dispatch();
-        handle(LDX_AB)  updateNZ(iXIndex = oOutside.readByte(addrAbsoluteByte()));  size(LDX_AB); dispatch();
-        handle(LDX_ABY) updateNZ(iXIndex = oOutside.readByte(addrAbsoluteYByte())); size(LDX_ABY); dispatch();
+        handle(LDX_IM) {
+            updateNZ(iXIndex = ldb(iProgramCounter + 1));
+            size(LDX_IM);
+            dispatch();
+        }
+
+        handle(LDX_ZP)  {
+            updateNZ(iXIndex = ldb(addrZeroPageByte()));
+            size(LDX_ZP);
+            dispatch();
+        }
+
+        handle(LDX_ZPY) {
+            updateNZ(iXIndex = ldb(addrZeroPageYByte()));
+            size(LDX_ZPY);
+            dispatch();
+        }
+
+        handle(LDX_AB)  {
+            updateNZ(iXIndex = ldb(addrAbsoluteByte()));
+            size(LDX_AB);
+            dispatch();
+        }
+
+        handle(LDX_ABY) {
+            updateNZ(iXIndex = ldb(addrAbsoluteYByte()));
+            size(LDX_ABY);
+            dispatch();
+        }
 
         // Store X
-        handle(STX_ZP)  oOutside.writeByte(addrZeroPageByte(),  iXIndex); size(STX_ZP); dispatch();
-        handle(STX_ZPY) oOutside.writeByte(addrZeroPageYByte(), iXIndex); size(STX_ZPY); dispatch();
-        handle(STX_AB)  oOutside.writeByte(addrAbsoluteByte(),  iXIndex); size(STX_AB); dispatch();
+        handle(STX_ZP)  {
+            stb(addrZeroPageByte(),  iXIndex);
+            size(STX_ZP);
+            dispatch();
+        }
+
+        handle(STX_ZPY) {
+            stb(addrZeroPageYByte(), iXIndex);
+            size(STX_ZPY);
+            dispatch();
+        }
+
+        handle(STX_AB) {
+            stb(addrAbsoluteByte(),  iXIndex);
+            size(STX_AB);
+            dispatch();
+        }
 
         // Load Y
-        handle(LDY_IM)  updateNZ(iYIndex = oOutside.readByte(iProgramCounter + 1)); size(LDY_IM); dispatch();
-        handle(LDY_ZP)  updateNZ(iYIndex = oOutside.readByte(addrZeroPageByte()));  size(LDY_ZP); dispatch();
-        handle(LDY_ZPX) updateNZ(iYIndex = oOutside.readByte(addrZeroPageXByte())); size(LDY_ZPX); dispatch();
-        handle(LDY_AB)  updateNZ(iYIndex = oOutside.readByte(addrAbsoluteByte()));  size(LDY_AB); dispatch();
-        handle(LDY_ABX) updateNZ(iYIndex = oOutside.readByte(addrAbsoluteXByte())); size(LDY_ABX); dispatch();
+        handle(LDY_IM) {
+            updateNZ(iYIndex = ldb(iProgramCounter + 1));
+            size(LDY_IM);
+            dispatch();
+        }
+
+        handle(LDY_ZP)  {
+            updateNZ(iYIndex = ldb(addrZeroPageByte()));
+            size(LDY_ZP);
+            dispatch();
+        }
+
+        handle(LDY_ZPX) {
+            updateNZ(iYIndex = ldb(addrZeroPageXByte()));
+            size(LDY_ZPX);
+            dispatch();
+        }
+
+        handle(LDY_AB) {
+            updateNZ(iYIndex = ldb(addrAbsoluteByte()));
+            size(LDY_AB);
+            dispatch();
+        }
+
+        handle(LDY_ABX) {
+            updateNZ(iYIndex = ldb(addrAbsoluteXByte()));
+            size(LDY_ABX);
+            dispatch();
+        }
 
         // Store Y
-        handle(STY_ZP)  oOutside.writeByte(addrZeroPageByte(),  iYIndex); size(STY_ZP); dispatch();
-        handle(STY_ZPX) oOutside.writeByte(addrZeroPageXByte(), iYIndex); size(STY_ZPX); dispatch();
-        handle(STY_AB)  oOutside.writeByte(addrAbsoluteByte(),  iYIndex); size(STY_AB); dispatch();
+        handle(STY_ZP) {
+            stb(addrZeroPageByte(),  iYIndex);
+            size(STY_ZP);
+            dispatch();
+        }
+
+        handle(STY_ZPX) {
+            stb(addrZeroPageXByte(), iYIndex);
+            size(STY_ZPX);
+            dispatch();
+        }
+
+        handle(STY_AB) {
+            stb(addrAbsoluteByte(), iYIndex);
+            size(STY_AB);
+            dispatch();
+        }
 
         // Compare
         // A - M
-        handle(CMP_IM)  cmpByte(iAccumulator, oOutside.readByte(iProgramCounter + 1)); size(CMP_IM); dispatch();
-        handle(CMP_ZP)  cmpByte(iAccumulator, oOutside.readByte(addrZeroPageByte()));  size(CMP_ZP); dispatch();
-        handle(CMP_ZPX) cmpByte(iAccumulator, oOutside.readByte(addrZeroPageXByte())); size(CMP_ZPX); dispatch();
-        handle(CMP_AB)  cmpByte(iAccumulator, oOutside.readByte(addrAbsoluteByte()));  size(CMP_AB); dispatch();
-        handle(CMP_ABX) cmpByte(iAccumulator, oOutside.readByte(addrAbsoluteXByte())); size(CMP_ABX); dispatch();
-        handle(CMP_ABY) cmpByte(iAccumulator, oOutside.readByte(addrAbsoluteYByte())); size(CMP_ABY); dispatch();
-        handle(CMP_IX)  cmpByte(iAccumulator, oOutside.readByte(addrPreIndexZeroPageXByte()));  size(CMP_IX); dispatch();
-        handle(CMP_IY)  cmpByte(iAccumulator, oOutside.readByte(addrPostIndexZeroPageYByte())); size(CMP_IY); dispatch();
+        handle(CMP_IM)  updateNZ(cmpByte(iAccumulator, ldb(iProgramCounter + 1))); size(CMP_IM); dispatch();
+        handle(CMP_ZP)  updateNZ(cmpByte(iAccumulator, ldb(addrZeroPageByte())));  size(CMP_ZP); dispatch();
+        handle(CMP_ZPX) updateNZ(cmpByte(iAccumulator, ldb(addrZeroPageXByte()))); size(CMP_ZPX); dispatch();
+        handle(CMP_AB)  updateNZ(cmpByte(iAccumulator, ldb(addrAbsoluteByte())));  size(CMP_AB); dispatch();
+        handle(CMP_ABX) updateNZ(cmpByte(iAccumulator, ldb(addrAbsoluteXByte()))); size(CMP_ABX); dispatch();
+        handle(CMP_ABY) updateNZ(cmpByte(iAccumulator, ldb(addrAbsoluteYByte()))); size(CMP_ABY); dispatch();
+        handle(CMP_IX)  updateNZ(cmpByte(iAccumulator, ldb(addrPreIndexZeroPageXByte())));  size(CMP_IX); dispatch();
+        handle(CMP_IY)  updateNZ(cmpByte(iAccumulator, ldb(addrPostIndexZeroPageYByte()))); size(CMP_IY); dispatch();
 
-        handle(CPX_IM)  cmpByte(iXIndex, oOutside.readByte(iProgramCounter + 1)); size(CPX_IM); dispatch();
-        handle(CPX_ZP)  cmpByte(iXIndex, oOutside.readByte(addrZeroPageByte()));  size(CPX_ZP); dispatch();
-        handle(CPX_AB)  cmpByte(iXIndex, oOutside.readByte(addrAbsoluteByte()));  size(CPX_AB); dispatch();
+        handle(CPX_IM)  updateNZ(cmpByte(iXIndex, ldb(iProgramCounter + 1))); size(CPX_IM); dispatch();
+        handle(CPX_ZP)  updateNZ(cmpByte(iXIndex, ldb(addrZeroPageByte())));  size(CPX_ZP); dispatch();
+        handle(CPX_AB)  updateNZ(cmpByte(iXIndex, ldb(addrAbsoluteByte())));  size(CPX_AB); dispatch();
 
-        handle(CPY_IM)  cmpByte(iYIndex, oOutside.readByte(iProgramCounter + 1)); size(CPY_IM); dispatch();
-        handle(CPY_ZP)  cmpByte(iYIndex, oOutside.readByte(addrZeroPageByte()));  size(CPY_ZP); dispatch();
-        handle(CPY_AB)  cmpByte(iYIndex, oOutside.readByte(addrAbsoluteByte()));  size(CPY_AB); dispatch();
+        handle(CPY_IM)  updateNZ(cmpByte(iYIndex, ldb(iProgramCounter + 1))); size(CPY_IM); dispatch();
+        handle(CPY_ZP)  updateNZ(cmpByte(iYIndex, ldb(addrZeroPageByte())));  size(CPY_ZP); dispatch();
+        handle(CPY_AB)  updateNZ(cmpByte(iYIndex, ldb(addrAbsoluteByte())));  size(CPY_AB); dispatch();
 
         // Conditional
         handle(BCC) {
             iProgramCounter += (!(iStatus & F_CARRY)) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BCC
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BCC
                 : SIZE_BCC;
             dispatch();
         }
 
         handle(BCS) {
             iProgramCounter += (iStatus & F_CARRY) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BCS
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BCS
                 : SIZE_BCS;
             dispatch();
         }
 
         handle(BEQ) {
             iProgramCounter += (iStatus & F_ZERO) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BEQ
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BEQ
                 : SIZE_BEQ;
             dispatch();
         }
 
         handle(BNE) {
             iProgramCounter += (!(iStatus & F_ZERO)) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BNE
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BNE
                 : SIZE_BNE;
             dispatch();
         }
 
         handle(BMI) {
             iProgramCounter += (iStatus & F_NEGATIVE) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BMI
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BMI
                 : SIZE_BMI;
             dispatch();
         }
 
         handle(BPL) {
             iProgramCounter += (!(iStatus & F_NEGATIVE)) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BPL
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BPL
                 : SIZE_BPL;
             dispatch();
         }
 
         handle(BVC) {
             iProgramCounter += (!(iStatus & F_OVERFLOW)) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BVC
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BVC
                 : SIZE_BVC;
             dispatch();
         }
 
         handle(BVS) {
             iProgramCounter += (iStatus & F_OVERFLOW) ?
-                (int8_t)oOutside.readByte(iProgramCounter + 1) + SIZE_BVS
+                (int8_t)ldb(iProgramCounter + 1) + SIZE_BVS
                 : SIZE_BVS;
             dispatch();
         }
@@ -460,7 +594,11 @@
 
         // Stack
         handle(PHA) pushByte(iAccumulator); size(PHA); dispatch();
-        handle(PHP) pushByte(iStatus | F_BREAK | F_UNUSED); size(PHP); dispatch();
+        handle(PHP)
+            pushByte(iStatus | F_BREAK | F_UNUSED);
+            size(PHP);
+            dispatch();
+
         handle(PLA) updateNZ(iAccumulator = pullByte()); size(PLA); dispatch();
         handle(PLP) {
             iValue = pullByte() & ~(F_BREAK | F_UNUSED);
@@ -475,36 +613,36 @@
 
         handle(DEC_ZP) {
             iAddress = addrZeroPageByte();
-            iValue   = (oOutside.readByte(iAddress) - 1);
+            iValue   = (ldb(iAddress) - 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(DEC_ZP);
             dispatch();
         }
 
         handle(DEC_ZPX) {
             iAddress = addrZeroPageXByte();
-            iValue   = (oOutside.readByte(iAddress) - 1);
+            iValue   = (ldb(iAddress) - 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(DEC_ZPX);
             dispatch();
         }
 
         handle(DEC_AB) {
             iAddress = addrAbsoluteByte();
-            iValue   = (oOutside.readByte(iAddress) - 1);
+            iValue   = (ldb(iAddress) - 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(DEC_AB);
             dispatch();
         }
 
         handle(DEC_ABX) {
             iAddress = addrAbsoluteXByte();
-            iValue   = (oOutside.readByte(iAddress) - 1);
+            iValue   = (ldb(iAddress) - 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(DEC_ABX);
             dispatch();
         }
@@ -516,36 +654,36 @@
 
         handle(INC_ZP) {
             iAddress = addrZeroPageByte();
-            iValue   = (oOutside.readByte(iAddress) + 1);
-            updateNZ(iValue );
-            oOutside.writeByte(iAddress, iValue);
+            iValue   = (ldb(iAddress) + 1);
+            updateNZ(iValue);
+            stb(iAddress, iValue);
             size(INC_ZP);
             dispatch();
         }
 
         handle(INC_ZPX) {
             iAddress = addrZeroPageXByte();
-            iValue   = (oOutside.readByte(iAddress) + 1);
+            iValue   = (ldb(iAddress) + 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(INC_ZPX);
             dispatch();
         }
 
         handle(INC_AB) {
             iAddress = addrAbsoluteByte();
-            iValue   = (oOutside.readByte(iAddress) + 1);
+            iValue   = (ldb(iAddress) + 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(INC_AB);
             dispatch();
         }
 
         handle(INC_ABX) {
             iAddress = addrAbsoluteXByte();
-            iValue   = (oOutside.readByte(iAddress) + 1);
+            iValue   = (ldb(iAddress) + 1);
             updateNZ(iValue);
-            oOutside.writeByte(iAddress, iValue);
+            stb(iAddress, iValue);
             size(INC_ABX);
             dispatch();
         }
@@ -553,30 +691,30 @@
 
 
         // Logic Ops...
-        handle(AND_IM)  updateNZ(iAccumulator &= oOutside.readByte(iProgramCounter + 1)); size(AND_IM); dispatch();
-        handle(AND_ZP)  updateNZ(iAccumulator &= oOutside.readByte(addrZeroPageByte()));  size(AND_ZP); dispatch();
-        handle(AND_ZPX) updateNZ(iAccumulator &= oOutside.readByte(addrZeroPageXByte())); size(AND_ZPX); dispatch();
-        handle(AND_AB)  updateNZ(iAccumulator &= oOutside.readByte(addrAbsoluteByte()));  size(AND_AB); dispatch();
-        handle(AND_ABX) updateNZ(iAccumulator &= oOutside.readByte(addrAbsoluteXByte())); size(AND_ABX); dispatch();
-        handle(AND_ABY) updateNZ(iAccumulator &= oOutside.readByte(addrAbsoluteYByte())); size(AND_ABY); dispatch();
-        handle(AND_IX)  updateNZ(iAccumulator &= oOutside.readByte(addrPreIndexZeroPageXByte()));  size(AND_IX); dispatch();
-        handle(AND_IY)  updateNZ(iAccumulator &= oOutside.readByte(addrPostIndexZeroPageYByte())); size(AND_IY); dispatch();
-        handle(ORA_IM)  updateNZ(iAccumulator |= oOutside.readByte(iProgramCounter + 1)); size(ORA_IM); dispatch();
-        handle(ORA_ZP)  updateNZ(iAccumulator |= oOutside.readByte(addrZeroPageByte())); size(ORA_ZP);  dispatch();
-        handle(ORA_ZPX) updateNZ(iAccumulator |= oOutside.readByte(addrZeroPageXByte())); size(ORA_ZPX); dispatch();
-        handle(ORA_AB)  updateNZ(iAccumulator |= oOutside.readByte(addrAbsoluteByte()));  size(ORA_AB); dispatch();
-        handle(ORA_ABX) updateNZ(iAccumulator |= oOutside.readByte(addrAbsoluteXByte())); size(ORA_ABX); dispatch();
-        handle(ORA_ABY) updateNZ(iAccumulator |= oOutside.readByte(addrAbsoluteYByte())); size(ORA_ABY); dispatch();
-        handle(ORA_IX)  updateNZ(iAccumulator |= oOutside.readByte(addrPreIndexZeroPageXByte()));  size(ORA_IX); dispatch();
-        handle(ORA_IY)  updateNZ(iAccumulator |= oOutside.readByte(addrPostIndexZeroPageYByte())); size(ORA_IY); dispatch();
-        handle(EOR_IM)  updateNZ(iAccumulator ^= oOutside.readByte(iProgramCounter + 1)); size(EOR_IM); dispatch();
-        handle(EOR_ZP)  updateNZ(iAccumulator ^= oOutside.readByte(addrZeroPageByte()));  size(EOR_ZP); dispatch();
-        handle(EOR_ZPX) updateNZ(iAccumulator ^= oOutside.readByte(addrZeroPageXByte())); size(EOR_ZPX); dispatch();
-        handle(EOR_AB)  updateNZ(iAccumulator ^= oOutside.readByte(addrAbsoluteByte()));  size(EOR_AB); dispatch();
-        handle(EOR_ABX) updateNZ(iAccumulator ^= oOutside.readByte(addrAbsoluteXByte())); size(EOR_ABX); dispatch();
-        handle(EOR_ABY) updateNZ(iAccumulator ^= oOutside.readByte(addrAbsoluteYByte())); size(EOR_ABY); dispatch();
-        handle(EOR_IX)  updateNZ(iAccumulator ^= oOutside.readByte(addrPreIndexZeroPageXByte()));  size(EOR_IX); dispatch();
-        handle(EOR_IY)  updateNZ(iAccumulator ^= oOutside.readByte(addrPostIndexZeroPageYByte())); size(EOR_IY); dispatch();
+        handle(AND_IM)  updateNZ(iAccumulator &= ldb(iProgramCounter + 1)); size(AND_IM); dispatch();
+        handle(AND_ZP)  updateNZ(iAccumulator &= ldb(addrZeroPageByte()));  size(AND_ZP); dispatch();
+        handle(AND_ZPX) updateNZ(iAccumulator &= ldb(addrZeroPageXByte())); size(AND_ZPX); dispatch();
+        handle(AND_AB)  updateNZ(iAccumulator &= ldb(addrAbsoluteByte()));  size(AND_AB); dispatch();
+        handle(AND_ABX) updateNZ(iAccumulator &= ldb(addrAbsoluteXByte())); size(AND_ABX); dispatch();
+        handle(AND_ABY) updateNZ(iAccumulator &= ldb(addrAbsoluteYByte())); size(AND_ABY); dispatch();
+        handle(AND_IX)  updateNZ(iAccumulator &= ldb(addrPreIndexZeroPageXByte()));  size(AND_IX); dispatch();
+        handle(AND_IY)  updateNZ(iAccumulator &= ldb(addrPostIndexZeroPageYByte())); size(AND_IY); dispatch();
+        handle(ORA_IM)  updateNZ(iAccumulator |= ldb(iProgramCounter + 1)); size(ORA_IM); dispatch();
+        handle(ORA_ZP)  updateNZ(iAccumulator |= ldb(addrZeroPageByte())); size(ORA_ZP);  dispatch();
+        handle(ORA_ZPX) updateNZ(iAccumulator |= ldb(addrZeroPageXByte())); size(ORA_ZPX); dispatch();
+        handle(ORA_AB)  updateNZ(iAccumulator |= ldb(addrAbsoluteByte()));  size(ORA_AB); dispatch();
+        handle(ORA_ABX) updateNZ(iAccumulator |= ldb(addrAbsoluteXByte())); size(ORA_ABX); dispatch();
+        handle(ORA_ABY) updateNZ(iAccumulator |= ldb(addrAbsoluteYByte())); size(ORA_ABY); dispatch();
+        handle(ORA_IX)  updateNZ(iAccumulator |= ldb(addrPreIndexZeroPageXByte()));  size(ORA_IX); dispatch();
+        handle(ORA_IY)  updateNZ(iAccumulator |= ldb(addrPostIndexZeroPageYByte())); size(ORA_IY); dispatch();
+        handle(EOR_IM)  updateNZ(iAccumulator ^= ldb(iProgramCounter + 1)); size(EOR_IM); dispatch();
+        handle(EOR_ZP)  updateNZ(iAccumulator ^= ldb(addrZeroPageByte()));  size(EOR_ZP); dispatch();
+        handle(EOR_ZPX) updateNZ(iAccumulator ^= ldb(addrZeroPageXByte())); size(EOR_ZPX); dispatch();
+        handle(EOR_AB)  updateNZ(iAccumulator ^= ldb(addrAbsoluteByte()));  size(EOR_AB); dispatch();
+        handle(EOR_ABX) updateNZ(iAccumulator ^= ldb(addrAbsoluteXByte())); size(EOR_ABX); dispatch();
+        handle(EOR_ABY) updateNZ(iAccumulator ^= ldb(addrAbsoluteYByte())); size(EOR_ABY); dispatch();
+        handle(EOR_IX)  updateNZ(iAccumulator ^= ldb(addrPreIndexZeroPageXByte()));  size(EOR_IX); dispatch();
+        handle(EOR_IY)  updateNZ(iAccumulator ^= ldb(addrPostIndexZeroPageYByte())); size(EOR_IY); dispatch();
 
         // Arithmetuc shift left
         handle(ASL_A) {
@@ -587,10 +725,10 @@
             dispatch();
         }
 
-        handle(ASL_ZP)  aslMemory(addrZeroPageByte()); size(ASL_ZP); dispatch();
-        handle(ASL_ZPX) aslMemory(addrZeroPageXByte()); size(ASL_ZPX); dispatch();
-        handle(ASL_AB)  aslMemory(addrAbsoluteByte()); size(ASL_AB); dispatch();
-        handle(ASL_ABX) aslMemory(addrAbsoluteXByte()); size(ASL_ABX); dispatch();
+        handle(ASL_ZP)  updateNZ(aslMemory(addrZeroPageByte())); size(ASL_ZP); dispatch();
+        handle(ASL_ZPX) updateNZ(aslMemory(addrZeroPageXByte())); size(ASL_ZPX); dispatch();
+        handle(ASL_AB)  updateNZ(aslMemory(addrAbsoluteByte())); size(ASL_AB); dispatch();
+        handle(ASL_ABX) updateNZ(aslMemory(addrAbsoluteXByte())); size(ASL_ABX); dispatch();
 
         // Logical shift right
         handle(LSR_A) {
@@ -610,10 +748,10 @@
             dispatch();
         }
 
-        handle(ROL_ZP)  rolMemory(addrZeroPageByte()); size(ROL_ZP); dispatch();
-        handle(ROL_ZPX) rolMemory(addrZeroPageXByte()); size(ROL_ZPX); dispatch();
-        handle(ROL_AB)  rolMemory(addrAbsoluteByte()); size(ROL_AB); dispatch();
-        handle(ROL_ABX) rolMemory(addrAbsoluteXByte()); size(ROL_ABX); dispatch();
+        handle(ROL_ZP)  updateNZ(rolMemory(addrZeroPageByte())); size(ROL_ZP); dispatch();
+        handle(ROL_ZPX) updateNZ(rolMemory(addrZeroPageXByte())); size(ROL_ZPX); dispatch();
+        handle(ROL_AB)  updateNZ(rolMemory(addrAbsoluteByte())); size(ROL_AB); dispatch();
+        handle(ROL_ABX) updateNZ(rolMemory(addrAbsoluteXByte())); size(ROL_ABX); dispatch();
 
         handle(ROR_A) {
             iCarry = (iStatus & F_CARRY) << 7; // carry -> sign
@@ -624,43 +762,41 @@
             dispatch();
         }
 
-        handle(ROR_ZP)  rorMemory(addrZeroPageByte());  size(ROR_ZP); dispatch();
-        handle(ROR_ZPX) rorMemory(addrZeroPageXByte()); size(ROR_ZPX); dispatch();
-        handle(ROR_AB)  rorMemory(addrAbsoluteByte());  size(ROR_AB); dispatch();
-        handle(ROR_ABX) rorMemory(addrAbsoluteXByte()); size(ROR_ABX); dispatch();
+        handle(ROR_ZP)  updateNZ(rorMemory(addrZeroPageByte()));  size(ROR_ZP); dispatch();
+        handle(ROR_ZPX) updateNZ(rorMemory(addrZeroPageXByte())); size(ROR_ZPX); dispatch();
+        handle(ROR_AB)  updateNZ(rorMemory(addrAbsoluteByte()));  size(ROR_AB); dispatch();
+        handle(ROR_ABX) updateNZ(rorMemory(addrAbsoluteXByte())); size(ROR_ABX); dispatch();
 
-        handle(LSR_ZP)  lsrMemory(addrZeroPageByte());  size(LSR_ZP); dispatch();
-        handle(LSR_ZPX) lsrMemory(addrZeroPageXByte()); size(LSR_ZPX); dispatch();
-        handle(LSR_AB)  lsrMemory(addrAbsoluteByte()); size(LSR_AB); dispatch();
-        handle(LSR_ABX) lsrMemory(addrAbsoluteXByte()); size(LSR_ABX); dispatch();
+        handle(LSR_ZP)  updateNZ(lsrMemory(addrZeroPageByte()));  size(LSR_ZP); dispatch();
+        handle(LSR_ZPX) updateNZ(lsrMemory(addrZeroPageXByte())); size(LSR_ZPX); dispatch();
+        handle(LSR_AB)  updateNZ(lsrMemory(addrAbsoluteByte())); size(LSR_AB); dispatch();
+        handle(LSR_ABX) updateNZ(lsrMemory(addrAbsoluteXByte())); size(LSR_ABX); dispatch();
 
 
         // Addition
         // A + M + C
-        handle(ADC_IM)  addByteWithCarry(oOutside.readByte(iProgramCounter + 1)); size(ADC_IM); dispatch();
-        handle(ADC_ZP)  addByteWithCarry(oOutside.readByte(addrZeroPageByte()));  size(ADC_ZP); dispatch();
-        handle(ADC_ZPX) addByteWithCarry(oOutside.readByte(addrZeroPageXByte())); size(ADC_ZPX); dispatch();
-        handle(ADC_AB)  addByteWithCarry(oOutside.readByte(addrAbsoluteByte()));  size(ADC_AB); dispatch();
-        handle(ADC_ABX) addByteWithCarry(oOutside.readByte(addrAbsoluteXByte())); size(ADC_ABX); dispatch();
-        handle(ADC_ABY) addByteWithCarry(oOutside.readByte(addrAbsoluteYByte())); size(ADC_ABY); dispatch();
-        handle(ADC_IX)  addByteWithCarry(oOutside.readByte(addrPreIndexZeroPageXByte()));  size(ADC_IX); dispatch();
-        handle(ADC_IY)  addByteWithCarry(oOutside.readByte(addrPostIndexZeroPageYByte())); size(ADC_IY); dispatch();
+        handle(ADC_IM)  updateNZ(addByteWithCarry(ldb(iProgramCounter + 1))); size(ADC_IM); dispatch();
+        handle(ADC_ZP)  updateNZ(addByteWithCarry(ldb(addrZeroPageByte())));  size(ADC_ZP); dispatch();
+        handle(ADC_ZPX) updateNZ(addByteWithCarry(ldb(addrZeroPageXByte()))); size(ADC_ZPX); dispatch();
+        handle(ADC_AB)  updateNZ(addByteWithCarry(ldb(addrAbsoluteByte())));  size(ADC_AB); dispatch();
+        handle(ADC_ABX) updateNZ(addByteWithCarry(ldb(addrAbsoluteXByte()))); size(ADC_ABX); dispatch();
+        handle(ADC_ABY) updateNZ(addByteWithCarry(ldb(addrAbsoluteYByte()))); size(ADC_ABY); dispatch();
+        handle(ADC_IX)  updateNZ(addByteWithCarry(ldb(addrPreIndexZeroPageXByte())));  size(ADC_IX); dispatch();
+        handle(ADC_IY)  updateNZ(addByteWithCarry(ldb(addrPostIndexZeroPageYByte()))); size(ADC_IY); dispatch();
 
         // Subtract
         // A - M - B => A + (255 - M) - (1 - C) => A + ~M + C
-        handle(SBC_IM)  subByteWithCarry(oOutside.readByte(iProgramCounter + 1)); size(SBC_IM); dispatch();
-        handle(SBC_ZP)  subByteWithCarry(oOutside.readByte(addrZeroPageByte()));  size(SBC_ZP); dispatch();
-        handle(SBC_ZPX) subByteWithCarry(oOutside.readByte(addrZeroPageXByte())); size(SBC_ZPX); dispatch();
-        handle(SBC_AB)  subByteWithCarry(oOutside.readByte(addrAbsoluteByte()));  size(SBC_AB); dispatch();
-        handle(SBC_ABX) subByteWithCarry(oOutside.readByte(addrAbsoluteXByte())); size(SBC_ABX); dispatch();
-        handle(SBC_ABY) subByteWithCarry(oOutside.readByte(addrAbsoluteYByte())); size(SBC_ABY); dispatch();
-        handle(SBC_IX)  subByteWithCarry(oOutside.readByte(addrPreIndexZeroPageXByte()));  size(SBC_IX); dispatch();
-        handle(SBC_IY)  subByteWithCarry(oOutside.readByte(addrPostIndexZeroPageYByte())); size(SBC_IY); dispatch();
-
-
+        handle(SBC_IM)  updateNZ(subByteWithCarry(ldb(iProgramCounter + 1))); size(SBC_IM); dispatch();
+        handle(SBC_ZP)  updateNZ(subByteWithCarry(ldb(addrZeroPageByte())));  size(SBC_ZP); dispatch();
+        handle(SBC_ZPX) updateNZ(subByteWithCarry(ldb(addrZeroPageXByte()))); size(SBC_ZPX); dispatch();
+        handle(SBC_AB)  updateNZ(subByteWithCarry(ldb(addrAbsoluteByte())));  size(SBC_AB); dispatch();
+        handle(SBC_ABX) updateNZ(subByteWithCarry(ldb(addrAbsoluteXByte()))); size(SBC_ABX); dispatch();
+        handle(SBC_ABY) updateNZ(subByteWithCarry(ldb(addrAbsoluteYByte()))); size(SBC_ABY); dispatch();
+        handle(SBC_IX)  updateNZ(subByteWithCarry(ldb(addrPreIndexZeroPageXByte())));  size(SBC_IX); dispatch();
+        handle(SBC_IY)  updateNZ(subByteWithCarry(ldb(addrPostIndexZeroPageYByte()))); size(SBC_IY); dispatch();
 
         handle(BIT_ZP) {
-            iValue = oOutside.readByte(addrZeroPageByte());
+            iValue = ldb(addrZeroPageByte());
             iStatus &= F_CLR_NZV;
             iStatus |= (iValue & (F_NEGATIVE | F_OVERFLOW)) | (
                 iValue & iAccumulator ? 0 : F_ZERO
@@ -668,8 +804,9 @@
             size(BIT_ZP);
             dispatch();
         }
+
         handle(BIT_AB) {
-            iValue = oOutside.readByte(addrAbsoluteByte());
+            iValue = ldb(addrAbsoluteByte());
             iStatus &= F_CLR_NZV;
             iStatus |= (iValue & (F_NEGATIVE|F_OVERFLOW)) | (
                 iValue & iAccumulator ? 0 : F_ZERO
@@ -687,29 +824,27 @@
 
             if (iAddress == iProgramCounter) {
                 // Hard Infinite Loop
+                std::printf("Infinite JMP_AB loop 0x%08X\n", (unsigned)iAddress);
                 return iCount;
             }
 
             iProgramCounter = iAddress;
 
             dispatch();
-            // Avoid the program counter update, since we releaded it anyway
-            //return true;
         }
 
         handle(JMP_IN) {
             // Emulate the 6502 indirect jump bug with respect to page boundaries.
             Address iPointerAddress = readWord(iProgramCounter + 1);
             if (0xFF == (iPointerAddress & 0xFF)) {
-                iAddress = oOutside.readByte(iPointerAddress);
-                iAddress |= oOutside.readByte(iPointerAddress & 0xFF00) << 8;
+                iAddress = ldb(iPointerAddress);
+                iAddress |= ldb(iPointerAddress & 0xFF00) << 8;
                 //iProgramCounter = readWord(iAddress);
                 iProgramCounter = iAddress;
             } else {
                 iProgramCounter = readWord(iPointerAddress);
             }
             dispatch();
-            //return true;
         }
 
         handle(JSR_AB) {
@@ -720,7 +855,6 @@
             pushByte(iAddress & 0xFF);
             iProgramCounter = readWord(iProgramCounter + 1);
             dispatch();
-            //return true;
         }
 
         handle(RTS) {
@@ -728,7 +862,6 @@
             iAddress |= (pullByte() << 8);
             iProgramCounter = iAddress + 1;
             dispatch();
-            //return true;
         }
 
         handle(RTI) {
@@ -742,12 +875,10 @@
             iAddress |= (pullByte() << 8);
             iProgramCounter = iAddress;// + 1;
             dispatch();
-            //return true;
         }
 
         handle(BRK) {
             // Push PC+2 as return address
-            //iValAddress    = iProgramCounter + 1;
             iAddress = (iProgramCounter + 2);
             pushByte(iAddress >> 8);
             pushByte(iAddress & 0xFF);
@@ -761,7 +892,6 @@
             // Set interrupted status. Is this the correct location?
             iStatus |= F_INTERRUPT;
             dispatch();
-            //return true;
         }
 
         handle(BAD)

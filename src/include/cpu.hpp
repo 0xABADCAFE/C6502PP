@@ -49,7 +49,7 @@ namespace C6502PP {
             return oOutside.readByte(iAddress) | (oOutside.readByte(iAddress + 1) << 8);
         }
 
-        void updateNZ(Byte iValue) noexcept {
+        void setNZ(Byte iValue) noexcept {
             iStatus &= F_CLR_NZ;
             iStatus |= iValue ? (iValue & F_NEGATIVE) : F_ZERO;
         }

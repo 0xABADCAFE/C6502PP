@@ -4,13 +4,14 @@
      * Assorted reusable ALU bits
      */
 
-    void cmpByte(Byte iTo, Byte iValue) noexcept {
+    Byte cmpByte(Byte iTo, Byte iValue) noexcept {
         Byte iRes = iTo - iValue;
 
         // Deal with the result
         iStatus &= F_CLR_NZC;
         iStatus |= (iRes ? (iRes & F_NEGATIVE) : F_ZERO);
         iStatus |= (iValue > iTo) ? 0 : F_CARRY;
+        return iRes;
     }
 
 
@@ -33,60 +34,64 @@
     Byte shiftLeftWithCarry(Byte iValue) noexcept {
         iStatus &= ~F_CARRY;
         iStatus |= (iValue & F_NEGATIVE) >> 7; // sign -> carry
-        updateNZ( iValue <<= 1 );
-        return iValue;
+        return iValue << 1;
     }
 
     Byte shiftRightWithCarry(Byte iValue) noexcept {
         iStatus &= ~F_CARRY;
         iStatus |= (iValue & F_CARRY);
-        updateNZ( iValue >>= 1 );
-        return iValue;
+        return iValue >> 1;
     }
 
 
-    void lsrMemory(Address iAddress) noexcept {
+    Byte lsrMemory(Address iAddress) noexcept {
+        Byte iResult = shiftRightWithCarry(oOutside.readByte(iAddress));
         oOutside.writeByte(
             iAddress,
-            shiftRightWithCarry(oOutside.readByte(iAddress))
+            iResult
         );
+        return iResult;
     }
 
-    void aslMemory(Address iAddress) noexcept {
+    Byte aslMemory(Address iAddress) noexcept {
+        Byte iResult = shiftLeftWithCarry(oOutside.readByte(iAddress));
         oOutside.writeByte(
             iAddress,
-            shiftLeftWithCarry(oOutside.readByte(iAddress))
+            iResult
         );
+        return iResult;
     }
 
     Byte rotateLeftWithCarry(Byte iValue) noexcept {
         Byte iCarry = iStatus & F_CARRY;
         iStatus &= ~F_CARRY;
         iStatus |= (iValue & F_NEGATIVE) >> 7; // sign -> carry
-        updateNZ( iValue = ((iValue << 1) | iCarry) );
-        return iValue;
+        return (iValue << 1) | iCarry;
     }
 
     Byte rotateRightWithCarry(Byte iValue) noexcept {
         uint8_t iCarry = (iStatus & F_CARRY) << 7; // carry -> sign
         iStatus &= ~F_CARRY;
         iStatus |= (iValue & F_CARRY); // carry -> carry
-        updateNZ( iValue = ( (iValue >> 1) | iCarry) );
-        return iValue;
+        return (iValue >> 1) | iCarry;
     }
 
-    void rolMemory(Address iAddress) noexcept {
+    Byte rolMemory(Address iAddress) noexcept {
+        Byte iResult = rotateLeftWithCarry(oOutside.readByte(iAddress));
         oOutside.writeByte(
             iAddress,
-            rotateLeftWithCarry(oOutside.readByte(iAddress))
+            iResult
         );
+        return iResult;
     }
 
-    void rorMemory(Address iAddress) noexcept {
+    Byte rorMemory(Address iAddress) noexcept {
+        Byte iResult = rotateRightWithCarry(oOutside.readByte(iAddress));
         oOutside.writeByte(
             iAddress,
-            rotateRightWithCarry(oOutside.readByte(iAddress))
+            iResult
         );
+        return iResult;
     }
 
     /**
@@ -129,7 +134,7 @@
         return (iDiffH & 0x1F0) | (iDiffL & 0x0F);
     }
 
-    void addByteWithCarry(Byte iValue) noexcept {
+    Byte addByteWithCarry(Byte iValue) noexcept {
         unsigned iSum = (iStatus & F_DECIMAL) ?
             addBCDWithCarry(iValue) :
             (iStatus & F_CARRY) + iValue + iAccumulator;
@@ -145,10 +150,10 @@
             (iValue & F_NEGATIVE) != (iRes & F_NEGATIVE)
         ) ? F_OVERFLOW : 0;
 
-        iAccumulator = iRes;
+        return iAccumulator = iRes;
     }
 
-    void subByteWithCarry(Byte iValue) noexcept {
+    Byte subByteWithCarry(Byte iValue) noexcept {
         unsigned iDiff = (iStatus & F_DECIMAL) ?
             subBCDWithCarry(iValue) :
             iAccumulator - iValue - (~iStatus & F_CARRY);
@@ -164,7 +169,7 @@
             (iAccumulator & F_NEGATIVE) != (iRes & F_NEGATIVE)
         ) ? F_OVERFLOW : 0;
 
-        iAccumulator = iRes;
+        return iAccumulator = iRes;
     }
 
 #   define INTERNALS_ADDRESSING
