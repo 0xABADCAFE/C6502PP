@@ -76,32 +76,32 @@ int main() {
         printf("Beginning execution from $%04X\n", system.oCPU.iProgramCounter);
 
         // cache warmup
-        system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
+        //system.oCPU.run();
+        //system.oCPU.iProgramCounter = 0x400;
         size_t iCount = 0;
         auto tStart = std::chrono::high_resolution_clock::now();
 
         // Time 10 runs
         system.oCPU.iProgramCounter = 0x400;
         iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
+//         system.oCPU.iProgramCounter = 0x400;
+//         iCount += system.oCPU.run();
 
         auto tElapsed = std::chrono::high_resolution_clock::now() - tStart;
 
@@ -118,7 +118,7 @@ int main() {
             );
         } else {
             printf(
-                "Terminated at $%04X\n after %zu insructions",
+                "Terminated at PC:$%04X after %zu insructions",
                 system.oCPU.iProgramCounter,
                 iCount
             );

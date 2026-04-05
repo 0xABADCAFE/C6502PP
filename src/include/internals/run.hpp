@@ -17,11 +17,21 @@
 // Conclude the operation.
 // When we nove to a jump table, this macro will thread the computed goto.
 //#define dispatch() break;
-#define dispatch() ++iCount; goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
+#define dispatch() \
+    if (++iCount > 1e8) { \
+        puts("Runaway"); \
+        return iCount; \
+    }; \
+    if (!assertNZ(iNResult, iZResult)) { \
+        return iCount; \
+    } \
+    goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
 
-#define initNZ() iNZResult = (iStatus & F_ZERO) ? 0 : ((iStatus & F_NEGATIVE)|1)
+    //printf("Executing 0x%04X [0x%02X, 0x%02X]\n", (unsigned)iProgramCounter, (unsigned)oOutside.readByte(iProgramCounter), //(unsigned)oOutside.readByte(iProgramCounter + 1));
 
-#define updateNZ(expression) setNZ(iNZResult = (expression))
+#define initNZ() { iZResult = !(iStatus & F_ZERO); iNResult = (int8_t)(iStatus & F_NEGATIVE); }
+
+#define updateNZ(expression) setNZ(iNResult = (int8_t)(iZResult = (expression)))
 
 #define ldb(addr) oOutside.readByte(addr)
 #define stb(addr, value) oOutside.writeByte(addr, value)
@@ -288,9 +298,11 @@
 
         };
 
-        size_t iCount = 0;
+        size_t iCount = ~0;
         Word iAddress;
-        Byte iValue, iCarry, iNZResult;
+        Byte iValue, iCarry;
+        uint8_t iZResult;
+        int8_t iNResult;
 
         initNZ();
         begin_interpreter:
@@ -592,28 +604,28 @@
         }
 
         handle(BEQ) {
-            iProgramCounter += (iStatus & F_ZERO) ?
+            iProgramCounter += !iZResult ?
                 (int8_t)ldb(iProgramCounter + 1) + SIZE_BEQ
                 : SIZE_BEQ;
             dispatch();
         }
 
         handle(BNE) {
-            iProgramCounter += (!(iStatus & F_ZERO)) ?
+            iProgramCounter += iZResult ?
                 (int8_t)ldb(iProgramCounter + 1) + SIZE_BNE
                 : SIZE_BNE;
             dispatch();
         }
 
         handle(BMI) {
-            iProgramCounter += (iStatus & F_NEGATIVE) ?
+            iProgramCounter += iNResult < 0 ?
                 (int8_t)ldb(iProgramCounter + 1) + SIZE_BMI
                 : SIZE_BMI;
             dispatch();
         }
 
         handle(BPL) {
-            iProgramCounter += (!(iStatus & F_NEGATIVE)) ?
+            iProgramCounter += iNResult >= 0 ?
                 (int8_t)ldb(iProgramCounter + 1) + SIZE_BPL
                 : SIZE_BPL;
             dispatch();
@@ -702,42 +714,48 @@
             dispatch();
         }
 
-        handle(TXA)
+        handle(TXA) {
             updateNZ(iAccumulator  = iXIndex);
             size(TXA);
             dispatch();
+        }
 
         // klausd tests: TXS does not update NZ
-        handle(TXS)
+        handle(TXS) {
             iStackPointer = iXIndex;
             size(TXS);
             dispatch();
+        }
 
-        handle(TYA)
+        handle(TYA) {
             updateNZ(iAccumulator = iYIndex);
             size(TYA);
             dispatch();
-
+        }
 
         // Stack
-        handle(PHA)
+        handle(PHA) {
             pushByte(iAccumulator);
             size(PHA);
             dispatch();
+        }
 
-        handle(PHP)
+        handle(PHP) {
             pushByte(iStatus | F_BREAK | F_UNUSED);
             size(PHP);
             dispatch();
+        }
 
-        handle(PLA)
+        handle(PLA) {
             updateNZ(iAccumulator = pullByte());
             size(PLA);
             dispatch();
+        }
 
         handle(PLP) {
             iValue = pullByte() & ~(F_BREAK | F_UNUSED);
             iStatus = (iStatus & (F_BREAK | F_UNUSED)) | iValue;
+            initNZ();
             size(PLP);
             dispatch();
         }
@@ -1222,20 +1240,36 @@
 
         handle(BIT_ZP) {
             iValue = ldb(addrZeroPageByte());
+
+            // SR Update (Bit 7 -> N, Bit 6 -> V)
             iStatus &= F_CLR_NZV;
-            iStatus |= (iValue & (F_NEGATIVE | F_OVERFLOW)) | (
-                iValue & iAccumulator ? 0 : F_ZERO
-            );
+            iStatus |= (iValue & (F_NEGATIVE | F_OVERFLOW));
+            if ((iValue & iAccumulator) == 0) {
+                iStatus |= F_ZERO;
+            }
+
+            // Lazy Flags
+            iNResult = iValue;                  // N-check will see bit 7
+            iZResult = (iValue & iAccumulator); // Z-check will see 0 or non-zero
+
             size(BIT_ZP);
             dispatch();
         }
 
         handle(BIT_AB) {
             iValue = ldb(addrAbsoluteByte());
+
+            // SR Update (Bit 7 -> N, Bit 6 -> V)
             iStatus &= F_CLR_NZV;
-            iStatus |= (iValue & (F_NEGATIVE|F_OVERFLOW)) | (
-                iValue & iAccumulator ? 0 : F_ZERO
-            );
+            iStatus |= (iValue & (F_NEGATIVE | F_OVERFLOW));
+            if ((iValue & iAccumulator) == 0) {
+                iStatus |= F_ZERO;
+            }
+
+            // Lazy Flags
+            iNResult = iValue;                  // N-check will see bit 7
+            iZResult = (iValue & iAccumulator); // Z-check will see 0 or non-zero
+
             size(BIT_AB);
             dispatch();
         }
@@ -1249,10 +1283,9 @@
 
             if (iAddress == iProgramCounter) {
                 // Hard Infinite Loop
-                std::printf("Infinite JMP_AB loop 0x%08X\n", (unsigned)iAddress);
+                std::printf("Infinite JMP_AB loop at 0x%04X\n", (unsigned)iAddress);
                 return iCount;
             }
-
             iProgramCounter = iAddress;
             dispatch();
         }
@@ -1293,6 +1326,7 @@
             iValue = pullByte() & ~(F_UNUSED|F_BREAK); // clear unused only
             iStatus &= (F_UNUSED|F_BREAK); // clear all but unused flag
             iStatus |= iValue;
+            initNZ();
 
             // Pull PC
             iAddress  = pullByte();
