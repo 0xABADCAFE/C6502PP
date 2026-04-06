@@ -58,19 +58,24 @@ struct alignas(NativeCacheLine) TestSystem {
 };
 
 int main() {
+
+    // Define a system that uses the SimpleMemory realisation of BusDevice.
+
     static TestSystem<Bus::SimpleMemory> system;
 
     // Initial state.
     system.showStatus();
 
+    // ROM name
     char const *sROM = "data/rom/diagnostic/6502_functional_test.bin";
 
+    // Load up the ROM
+    size_t iROMSize = system.oBus.loadImage(sROM, 0);
+
+    // Magic endless loop address for a successful run.
     Address const KLAUS_MAGIC = 0x3469;
 
-    std::FILE* pROM = fopen(sROM, "rb");
-    if (pROM) {
-        fread(system.oBus.bytes, 1, 65536, pROM);
-        fclose(pROM);
+    if (iROMSize) {
         printf("Loaded %s\n", sROM);
         system.oCPU.iProgramCounter = 0x400;
         printf("Beginning execution from $%04X\n", system.oCPU.iProgramCounter);
