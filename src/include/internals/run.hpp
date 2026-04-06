@@ -1329,8 +1329,9 @@ using Jump = uint16_t;
 
             illegal();
         }
+        // Fall through after illegal
         return iCount;
     }
 
 #   define INTERNALS_STEP
-#endif
+#endif // nice.
