@@ -7,7 +7,7 @@
 #ifdef INTERPRET_SWITCH // switch-case
 #   define OP(NAME)
 #   define handle(NAME) case NAME: asm("# case " #NAME ": -->");
-#   define dispatch() ++iCount; break;
+#   define dispatch() /*++iCount;*/ break;
 #   define begin() for (;;) switch (oOutside.readByte(iProgramCounter))
 #   define done()
 #   define illegal() default: return iCount;
@@ -23,7 +23,7 @@ using Jump = uint16_t;
 #   define OP(NAME) L_ ## NAME
 #   define handle(NAME) OP(NAME): asm("# handle(" #NAME ") -->");
 #   define JTE(NAME)  (Jump) ((uint8_t const*)&&OP(NAME) - (uint8_t const*)&&begin_interpreter)
-#   define dispatch() ++iCount; goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
+#   define dispatch() /*++iCount;*/ goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
 #   define begin() \
     begin_interpreter: \
     dispatch();
@@ -34,7 +34,7 @@ using Jump = uint16_t;
     /**
      * Main run entry point. We need to make this interruptable, really.
      */
-    size_t run() noexcept {
+    size_t run() noexcept __attribute__((hot)) {
 
 #ifndef INTERPRET_SWITCH
         alignas(NativeCacheLine) static Jump const aJumpTable[256] __attribute__((section(".text"))) = {
@@ -304,6 +304,9 @@ using Jump = uint16_t;
         size_t iCount = 0;
         Word iAddress;
         Byte iValue, iCarry;
+
+        // incendiary hot
+        auto& __restrict__ oOutside = this->oOutside;
 
         begin() {
 
