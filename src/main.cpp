@@ -64,7 +64,62 @@ int main() {
     static TestSystem<Bus::SimpleMemory> system;
 
     // Initial state.
+
     system.showStatus();
+    int const UNROLL = 10;
+    
+    // Singe Operation Test
+    {
+        size_t const LOOPS  = 10000;
+        size_t const LENGTH = 32768;
+        size_t const BYTES_PER_OP = 1;
+        int const OPERATION = TAX;
+
+        // Put 32K ops after zero page and stack as our test code.
+        std::memset(system.oBus.bytes + 512, OPERATION, LENGTH);
+        system.oBus.bytes[512 + LENGTH] = 0xFF; // illegal opcode exit
+
+        // Warm the caches
+        system.oCPU.iProgramCounter = 512;
+        system.oCPU.run();
+
+        // Time many runs              
+        size_t iCount = LOOPS * LENGTH * UNROLL / BYTES_PER_OP;
+        auto tStart = std::chrono::high_resolution_clock::now();
+
+        for (size_t i = 0; i < LOOPS; ++i) {     
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+            system.oCPU.iProgramCounter = 512;
+            /*iCount += */system.oCPU.run();
+        }
+        auto tElapsed = std::chrono::high_resolution_clock::now() - tStart;
+        size_t iNanoSeconds = std::chrono::duration_cast<std::chrono::nanoseconds>(tElapsed).count();
+        double fMIPS = 1.0e3 * iCount / (double)iNanoSeconds;
+        printf(
+            "Ran %zu 0x%02X insructions in %zd nanoseconds [%.3f MIPS]\n",
+            iCount,
+            (unsigned)OPERATION,
+            iNanoSeconds,
+            fMIPS
+        );
+    }
 
     // ROM name
     char const *sROM = "data/rom/diagnostic/6502_functional_test.bin";
@@ -75,6 +130,8 @@ int main() {
     // Magic endless loop address for a successful run.
     Address const KLAUS_MAGIC = 0x3469;
 
+    size_t const KLAUS_OP_COUNT = 30648049;
+
     if (iROMSize) {
         printf("Loaded %s\n", sROM);
         system.oCPU.iProgramCounter = 0x400;
@@ -83,30 +140,30 @@ int main() {
         // cache warmup
         system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        size_t iCount = 0;
+        size_t iCount = KLAUS_OP_COUNT * UNROLL;
         auto tStart = std::chrono::high_resolution_clock::now();
 
         // Time 10 runs
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
         system.oCPU.iProgramCounter = 0x400;
-        iCount += system.oCPU.run();
+        /*iCount += */system.oCPU.run();
 
         auto tElapsed = std::chrono::high_resolution_clock::now() - tStart;
 
