@@ -73,7 +73,7 @@ int main() {
         size_t const LOOPS  = 10000;
         size_t const LENGTH = 32768;
         size_t const BYTES_PER_OP = 1;
-        int const OPERATION = TAX;
+        int const OPERATION = NOP;
 
         // Put 32K ops after zero page and stack as our test code.
         std::memset(system.oBus.bytes + 512, OPERATION, LENGTH);

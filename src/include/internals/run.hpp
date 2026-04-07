@@ -31,6 +31,12 @@ using Jump = uint16_t;
 
 #endif
 
+#define load(addr) oOutside.readByte(addr)
+#define store(addr,val) oOutside.writeByte(addr, val)
+
+#define pull() (oOutside.readByte(++iStackPointer + STACK_BASE))
+#define push(byte) oOutside.writeByte(STACK_BASE + iStackPointer--, byte)
+
     /**
      * Main run entry point. We need to make this interruptable, really.
      */
@@ -298,8 +304,6 @@ using Jump = uint16_t;
         };
 #endif
 
-#define load(addr) oOutside.readByte(addr)
-#define store(addr,val) oOutside.writeByte(addr, val)
 
         size_t iCount = 0;
         Word iAddress;
@@ -736,26 +740,26 @@ using Jump = uint16_t;
 
             // Stack
             handle(PHA) {
-                pushByte(iAccumulator);
+                push(iAccumulator);
                 size(PHA);
                 dispatch();
             }
 
             handle(PHP) {
                 // PHP... SixPhpive02 Rides Again
-                pushByte(iStatus | F_BREAK | F_UNUSED);
+                push(iStatus | F_BREAK | F_UNUSED);
                 size(PHP);
                 dispatch();
             }
 
             handle(PLA) {
-                updateNZ(iAccumulator = pullByte());
+                updateNZ(iAccumulator = pull());
                 size(PLA);
                 dispatch();
             }
 
             handle(PLP) {
-                iValue = pullByte() & ~(F_BREAK | F_UNUSED);
+                iValue = pull() & ~(F_BREAK | F_UNUSED);
                 iStatus = (iStatus & (F_BREAK | F_UNUSED)) | iValue;
                 size(PLP);
                 dispatch();
@@ -1287,27 +1291,27 @@ using Jump = uint16_t;
             handle(JSR_AB) {
                 // Note the 6502 notion of the return address is actually the address of the last byte of the operation.
                 iAddress = (iProgramCounter + 2);
-                pushByte(iAddress >> 8);
-                pushByte(iAddress & 0xFF);
+                push(iAddress >> 8);
+                push(iAddress & 0xFF);
                 iProgramCounter = readWord(iProgramCounter + 1);
                 dispatch();
             }
 
             handle(RTS) {
-                iAddress  = pullByte();
-                iAddress |= (pullByte() << 8);
+                iAddress  = pull();
+                iAddress |= (pull() << 8);
                 iProgramCounter = iAddress + 1;
                 dispatch();
             }
 
             handle(RTI) {
                 // Pull SR but ignore bit 5
-                iValue = pullByte() & ~(F_UNUSED|F_BREAK); // clear unused only
+                iValue = pull() & ~(F_UNUSED|F_BREAK); // clear unused only
                 iStatus &= (F_UNUSED|F_BREAK); // clear all but unused flag
                 iStatus |= iValue;
                 // PC
-                iAddress  = pullByte();
-                iAddress |= (pullByte() << 8);
+                iAddress  = pull();
+                iAddress |= (pull() << 8);
                 iProgramCounter = iAddress;// + 1;
                 dispatch();
             }
@@ -1316,11 +1320,11 @@ using Jump = uint16_t;
                 // Push PC+2 as return address
                 //iValAddress    = iProgramCounter + 1;
                 iAddress = (iProgramCounter + 2);
-                pushByte(iAddress >> 8);
-                pushByte(iAddress & 0xFF);
+                push(iAddress >> 8);
+                push(iAddress & 0xFF);
 
                 // Push SR
-                pushByte(iStatus|F_BREAK|F_UNUSED);
+                push(iStatus|F_BREAK|F_UNUSED);
 
                 // Reload PC from IRQ vector
                 iProgramCounter = readWord(VEC_IRQ);
