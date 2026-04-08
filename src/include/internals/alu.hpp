@@ -13,23 +13,6 @@
         iStatus |= (iValue > iTo) ? 0 : F_CARRY;
     }
 
-
-    /**
-    * Pull a raw byte off the stack
-    */
-    Byte pullByte() noexcept {
-        ++iStackPointer;
-        return oOutside.readByte(iStackPointer + STACK_BASE);
-    }
-
-    /**
-    * Push a byte on the stack
-    */
-    void pushByte(Byte iValue) noexcept {
-        oOutside.writeByte(STACK_BASE + iStackPointer, iValue);
-        --iStackPointer;
-    }
-
     Byte shiftLeftWithCarry(Byte iValue) noexcept {
         iStatus &= ~F_CARRY;
         iStatus |= (iValue & F_NEGATIVE) >> 7; // sign -> carry

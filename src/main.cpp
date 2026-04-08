@@ -1,113 +1,85 @@
 #include <chrono>
 #include <cstdio>
 #include <new>
-#include "cpu.hpp"
-#include "bus/memory.hpp"
+#include "system.hpp"
 
 using namespace C6502PP;
 
-template <BusDevice MemoryBus>
-struct alignas(NativeCacheLine) TestSystem {
-    alignas(NativeCacheLine) CPU<MemoryBus> oCPU;
-    alignas(NativeCacheLine) MemoryBus oBus;
-
-    TestSystem() : oCPU(oBus) {
-        std::printf("sizeof(TestSystem) = %zu bytes\n", sizeof(TestSystem));
+struct PerOpcodeCountObserver {
+    size_t aCounts[256] = { 0 };
+    inline Byte observe(Byte value) noexcept {
+        ++aCounts[value];
+        return value;
     }
 
-    TestSystem& softReset() noexcept {
-        oCPU.softReset();
-        oBus.softReset();
-        return *this;
-    }
-
-    TestSystem& hardReset() noexcept {
-        oCPU.hardReset();
-        oBus.hardReset();
-        return *this;
-    }
-
-    void showStatus() const noexcept {
-        std::printf(
-            "PC: 0x%04X, points to %p\n"
-            "SP: 0x%02X [0x%04X], points to %p\n"
-            "A: 0x%02X [%d]\n"
-            "X: 0x%02X [%d]\n"
-            "Y: 0x%02X [%d]\n"
-            "F: %c %c | %c %c %c %c %c\n",
-            (unsigned)oCPU.iProgramCounter,
-            &oBus.bytes[oCPU.iProgramCounter],
-            (unsigned)oCPU.iStackPointer,
-            (unsigned)(STACK_BASE + oCPU.iStackPointer),
-            &oBus.bytes[STACK_BASE + oCPU.iStackPointer],
-            (unsigned)oCPU.iAccumulator,
-            (int)(int8_t)oCPU.iAccumulator,
-            (unsigned)oCPU.iXIndex,
-            (int)(int8_t)oCPU.iXIndex,
-            (unsigned)oCPU.iYIndex,
-            (int)(int8_t)oCPU.iYIndex,
-            (int)(oCPU.iStatus & F_NEGATIVE ? 'N' : '-'),
-            (int)(oCPU.iStatus & F_OVERFLOW ? 'V' : '-'),
-            (int)(oCPU.iStatus & F_BREAK ? 'B' : '-'),
-            (int)(oCPU.iStatus & F_DECIMAL ? 'D' : '-'),
-            (int)(oCPU.iStatus & F_INTERRUPT ? 'I' : '-'),
-            (int)(oCPU.iStatus & F_ZERO ? 'Z' : '-'),
-            (int)(oCPU.iStatus & F_CARRY ? 'C' : '-')
-        );
-    }
+    void dumpStats() const noexcept;
+    void reset() noexcept;
 };
+
+void PerOpcodeCountObserver::dumpStats() const noexcept
+{
+    for (unsigned i = 0; i < 256; ++i) {
+        if (aCounts[i] > 0) {
+            printf(
+                "0x%02X => %zu\n", i, aCounts[i]
+            );
+        }
+    }
+}
+
+void PerOpcodeCountObserver::reset() noexcept
+{
+    for (unsigned i = 0; i < 256; ++i) {
+        aCounts[i] = 0;
+    }
+}
+
+// Decide which system we are going to use.
+#ifdef STATIC_SYSTEM
+    // Fast, 64KB+ on stack/heap, no virtual calls
+    using SystemType = CompileTimeSystem<MOS6502, Bus::SimpleMemory>;
+#else
+    // Flexible, 40 bytes, virtual bus calls
+    using SystemType = RuntimeSystem<MOS6502, Bus::AbstractMemory>;
+#endif
 
 int main() {
 
-    // Define a system that uses the SimpleMemory realisation of BusDevice.
-
-    static TestSystem<Bus::SimpleMemory> system;
-
-    // Initial state.
+    static SystemType system;
 
     system.showStatus();
     int const UNROLL = 10;
-    
+
     // Singe Operation Test
     {
         size_t const LOOPS  = 10000;
         size_t const LENGTH = 32768;
-        size_t const BYTES_PER_OP = 1;
-        int const OPERATION = TAX;
+        size_t const BYTES_PER_OP = SIZE_NOP;
+        Address const START  = 512;
+        Byte const OPERATION = NOP;
 
         // Put 32K ops after zero page and stack as our test code.
-        std::memset(system.oBus.bytes + 512, OPERATION, LENGTH);
-        system.oBus.bytes[512 + LENGTH] = 0xFF; // illegal opcode exit
+        system.oBus.blockFill(START, LENGTH, OPERATION);
+        system.oBus.writeByte(START + LENGTH, 0xFF); // illegal opcode exit
 
         // Warm the caches
-        system.oCPU.iProgramCounter = 512;
-        system.oCPU.run();
+        system.runFrom(START);
 
-        // Time many runs              
+        // Time many runs
         size_t iCount = LOOPS * LENGTH * UNROLL / BYTES_PER_OP;
         auto tStart = std::chrono::high_resolution_clock::now();
 
-        for (size_t i = 0; i < LOOPS; ++i) {     
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
-            system.oCPU.iProgramCounter = 512;
-            /*iCount += */system.oCPU.run();
+        for (size_t i = 0; i < LOOPS; ++i) {
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
+            system.runFrom(START);
         }
         auto tElapsed = std::chrono::high_resolution_clock::now() - tStart;
         size_t iNanoSeconds = std::chrono::duration_cast<std::chrono::nanoseconds>(tElapsed).count();
@@ -121,49 +93,36 @@ int main() {
         );
     }
 
-    // ROM name
+    // Klaus D Rom Test
     char const *sROM = "data/rom/diagnostic/6502_functional_test.bin";
 
     // Load up the ROM
     size_t iROMSize = system.oBus.loadImage(sROM, 0);
 
-    // Magic endless loop address for a successful run.
-    Address const KLAUS_MAGIC = 0x3469;
-
-    size_t const KLAUS_OP_COUNT = 30648049;
-
+    size_t  const KLAUS_OP_COUNT = 30648049;
+    Address const KLAUS_MAGIC    = 0x3469;  // Magic endless loop address for a successful run.
+    Address const KLAUS_START    = 0x400;
     if (iROMSize) {
-        printf("Loaded %s\n", sROM);
-        system.oCPU.iProgramCounter = 0x400;
-        printf("Beginning execution from $%04X\n", system.oCPU.iProgramCounter);
+        printf("Loaded %s\nBeginning execution from 0x%04X\n", sROM, (unsigned)KLAUS_START);
+
+        system.oOpcodeObserver.reset();
 
         // cache warmup
-        system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
+        system.runFrom(KLAUS_START);
         size_t iCount = KLAUS_OP_COUNT * UNROLL;
         auto tStart = std::chrono::high_resolution_clock::now();
 
         // Time 10 runs
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
-        system.oCPU.iProgramCounter = 0x400;
-        /*iCount += */system.oCPU.run();
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
+        system.runFrom(KLAUS_START);
 
         auto tElapsed = std::chrono::high_resolution_clock::now() - tStart;
 
@@ -171,7 +130,7 @@ int main() {
 
         double fMIPS = 1.0e3 * iCount / (double)iNanoSeconds;
 
-        if (system.oCPU.iProgramCounter == KLAUS_MAGIC) {
+        if (system.oCPU.getProgramCounter() == KLAUS_MAGIC) {
             printf(
                 "Klaus Test Passed! Ran %zu insructions in %zd nanoseconds [%.3f MIPS]\n",
                 iCount,
@@ -180,8 +139,8 @@ int main() {
             );
         } else {
             printf(
-                "Terminated at $%04X\n after %zu insructions",
-                system.oCPU.iProgramCounter,
+                "Terminated at 0x%04X\n after %zu insructions",
+                system.oCPU.getProgramCounter(),
                 iCount
             );
         }

@@ -2,15 +2,13 @@
 
 #define size(NAME) iProgramCounter += SIZE_ ## NAME
 
-//#define INTERPRET_SWITCH
-
 #ifdef INTERPRET_SWITCH // switch-case
 #   define OP(NAME)
 #   define handle(NAME) case NAME: asm("# case " #NAME ": -->");
-#   define dispatch() /*++iCount;*/ break;
+#   define dispatch() break;
 #   define begin() for (;;) switch (oOutside.readByte(iProgramCounter))
 #   define done()
-#   define illegal() default: return iCount;
+#   define illegal() default: return *this;
 
 #else // Jump Table interpeter
 
@@ -23,7 +21,7 @@ using Jump = uint16_t;
 #   define OP(NAME) L_ ## NAME
 #   define handle(NAME) OP(NAME): asm("# handle(" #NAME ") -->");
 #   define JTE(NAME)  (Jump) ((uint8_t const*)&&OP(NAME) - (uint8_t const*)&&begin_interpreter)
-#   define dispatch() /*++iCount;*/ goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
+#   define dispatch() /*++iCount;*/ goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOpcodeObserver.observe(oOutside.readByte(iProgramCounter))])
 #   define begin() \
     begin_interpreter: \
     dispatch();
@@ -31,10 +29,21 @@ using Jump = uint16_t;
 
 #endif
 
+#define load(addr) oOutside.readByte(addr)
+#define store(addr,val) oOutside.writeByte(addr, val)
+
+#define pull() (oOutside.readByte(++iStackPointer + STACK_BASE))
+#define push(byte) oOutside.writeByte(STACK_BASE + iStackPointer--, byte)
+
+#define lsrm(addr) oOutside.writeByte( \
+            iAddress, \
+            shiftRightWithCarry(oOutside.readByte((iAddress = addr))) \
+        )
+
     /**
      * Main run entry point. We need to make this interruptable, really.
      */
-    size_t run() noexcept __attribute__((hot)) {
+    MOS6502& run() noexcept __attribute__((hot)) {
 
 #ifndef INTERPRET_SWITCH
         alignas(NativeCacheLine) static Jump const aJumpTable[256] __attribute__((section(".text"))) = {
@@ -296,17 +305,15 @@ using Jump = uint16_t;
             JTE(BAD), // 0xFF - illegal opcode
 
         };
+
 #endif
 
-#define load(addr) oOutside.readByte(addr)
-#define store(addr,val) oOutside.writeByte(addr, val)
-
-        size_t iCount = 0;
-        Word iAddress;
-        Byte iValue, iCarry;
-
+#ifndef BUS_UNPINNED
         // incendiary hot
         auto& __restrict__ oOutside = this->oOutside;
+#endif
+        Word iAddress;
+        Byte iValue, iCarry;
 
         begin() {
 
@@ -736,26 +743,26 @@ using Jump = uint16_t;
 
             // Stack
             handle(PHA) {
-                pushByte(iAccumulator);
+                push(iAccumulator);
                 size(PHA);
                 dispatch();
             }
 
             handle(PHP) {
                 // PHP... SixPhpive02 Rides Again
-                pushByte(iStatus | F_BREAK | F_UNUSED);
+                push(iStatus | F_BREAK | F_UNUSED);
                 size(PHP);
                 dispatch();
             }
 
             handle(PLA) {
-                updateNZ(iAccumulator = pullByte());
+                updateNZ(iAccumulator = pull());
                 size(PLA);
                 dispatch();
             }
 
             handle(PLP) {
-                iValue = pullByte() & ~(F_BREAK | F_UNUSED);
+                iValue = pull() & ~(F_BREAK | F_UNUSED);
                 iStatus = (iStatus & (F_BREAK | F_UNUSED)) | iValue;
                 size(PLP);
                 dispatch();
@@ -1265,7 +1272,7 @@ using Jump = uint16_t;
                 iAddress = readWord(iProgramCounter + 1);
                 if (iAddress == iProgramCounter) {
                     // Hard Infinite Loop
-                    return iCount;
+                    return *this;
                 }
                 iProgramCounter = iAddress;
                 dispatch();
@@ -1287,27 +1294,27 @@ using Jump = uint16_t;
             handle(JSR_AB) {
                 // Note the 6502 notion of the return address is actually the address of the last byte of the operation.
                 iAddress = (iProgramCounter + 2);
-                pushByte(iAddress >> 8);
-                pushByte(iAddress & 0xFF);
+                push(iAddress >> 8);
+                push(iAddress & 0xFF);
                 iProgramCounter = readWord(iProgramCounter + 1);
                 dispatch();
             }
 
             handle(RTS) {
-                iAddress  = pullByte();
-                iAddress |= (pullByte() << 8);
+                iAddress  = pull();
+                iAddress |= (pull() << 8);
                 iProgramCounter = iAddress + 1;
                 dispatch();
             }
 
             handle(RTI) {
                 // Pull SR but ignore bit 5
-                iValue = pullByte() & ~(F_UNUSED|F_BREAK); // clear unused only
+                iValue = pull() & ~(F_UNUSED|F_BREAK); // clear unused only
                 iStatus &= (F_UNUSED|F_BREAK); // clear all but unused flag
                 iStatus |= iValue;
                 // PC
-                iAddress  = pullByte();
-                iAddress |= (pullByte() << 8);
+                iAddress  = pull();
+                iAddress |= (pull() << 8);
                 iProgramCounter = iAddress;// + 1;
                 dispatch();
             }
@@ -1316,11 +1323,11 @@ using Jump = uint16_t;
                 // Push PC+2 as return address
                 //iValAddress    = iProgramCounter + 1;
                 iAddress = (iProgramCounter + 2);
-                pushByte(iAddress >> 8);
-                pushByte(iAddress & 0xFF);
+                push(iAddress >> 8);
+                push(iAddress & 0xFF);
 
                 // Push SR
-                pushByte(iStatus|F_BREAK|F_UNUSED);
+                push(iStatus|F_BREAK|F_UNUSED);
 
                 // Reload PC from IRQ vector
                 iProgramCounter = readWord(VEC_IRQ);
@@ -1333,7 +1340,7 @@ using Jump = uint16_t;
             illegal();
         }
         // Fall through after illegal
-        return iCount;
+        return *this;
     }
 
 #   define INTERNALS_STEP

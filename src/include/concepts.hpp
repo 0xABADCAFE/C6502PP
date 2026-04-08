@@ -49,12 +49,41 @@ namespace C6502PP {
     concept BusDevice = Device<T> && ByteAccessible<T>;
 
     /**
+     * FetchedOpcodeObserver
+     *
+     * Observes fetched opcodes in flight.
+     */
+    template<typename T>
+    concept FetchedOpcodeObserver = requires(T t, Byte value) {
+        { t.observe(value) } noexcept -> std::convertible_to<Byte>;
+        { t.dumpStats() } noexcept;
+        { t.reset() } noexcept;
+    };
+
+    /**
+     * Default
+     */
+    struct PassthroughOpcodeObserver {
+        // Marked constexpr/inline to facilitate total elimination
+        inline constexpr Byte observe(Byte value) const noexcept { return value; }
+        inline constexpr void dumpStats() const noexcept { }
+        inline constexpr void reset() const noexcept { }
+    };
+
+    /**
      * Processor
      *
-     * Defines Device with constructor dependency on BusDevice
+     * Defines Device with constructor dependency on BusDevice.
+     * NOTE: Although the Processor must be constructable from the BusDevice reference, it must not invoke
+     * any behaviours from construction as there can be no guarantee it has been initialised.
      */
     template<typename D, typename B>
-    concept Processor = Device<D> && BusDevice<B> && std::constructible_from<D, B&>;
+    concept Processor = Device<D> && BusDevice<B> && std::constructible_from<D, B&> && requires(D d, Address address) {
+        { d.setProgramCounter(address) } noexcept -> std::same_as<D&>;
+        { d.getProgramCounter() } noexcept -> std::same_as<Address>;
+        { d.run() } noexcept -> std::same_as<D&>;
+    };
+
 }
 
 #endif
