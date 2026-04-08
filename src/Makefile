@@ -1,5 +1,5 @@
 CC      := g++
-CFLAGS  := -Wall -Wextra -march=native -falign-labels=16 -Ofast --std=c++20 -I./include -fconcepts-diagnostics-depth=2 -fcf-protection=none
+CFLAGS  := -Wall -Wextra -march=native -flto -falign-labels=16 -Ofast --std=c++20 -I./include -fconcepts-diagnostics-depth=2 -fcf-protection=none
 TARGET  := test
 SRCS    := main.cpp memory.cpp
 OBJS    := $(SRCS:.cpp=.o)

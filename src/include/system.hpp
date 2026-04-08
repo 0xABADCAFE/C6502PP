@@ -6,8 +6,17 @@
 
 namespace C6502PP {
 
-template <BusDevice MemoryBus, Processor CPU>
+/**
+ * CompileTymeSystem<Processor. BusDevice>
+ *
+ * Wraps an instance of a given Processor concept and BusDevice concept such that code generator is
+ * able to inine away the read/write calls to the bus implementation.
+ */
+template <template <typename> typename CPUType, BusDevice MemoryBus>
 struct alignas(NativeCacheLine) CompileTimeSystem {
+
+    using CPU = CPUType<MemoryBus>;
+
     alignas(NativeCacheLine) CPU oCPU;
     alignas(NativeCacheLine) MemoryBus oBus;
 
@@ -15,12 +24,14 @@ struct alignas(NativeCacheLine) CompileTimeSystem {
         std::printf("sizeof(CompileTimeSystem) = %zu bytes\n", sizeof(CompileTimeSystem));
     }
 
-    size_t run() {
-        return oCPU.run();
+    CompileTimeSystem& run() {
+        oCPU.run();
+        return *this;
     }
 
-    size_t runFrom(Address iStart) {
-        return oCPU.setProgramCounter(iStart).run();
+    CompileTimeSystem& runFrom(Address iStart) {
+        oCPU.setProgramCounter(iStart).run();
+        return *this;
     }
 
     CompileTimeSystem& softReset() noexcept {

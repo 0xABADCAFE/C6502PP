@@ -10,11 +10,11 @@ using namespace C6502PP;
 struct RuntimeSystem {
     alignas(NativeCacheLine) CPU<Bus::RuntimeAbstractDevice&> oCPU;
     Bus::RuntimeAbstractDevice& oBus;
-    
+
     RuntimeSystem(Bus::RuntimeAbstractDevice* oBus) : oCPU(*oBus), oBus(*oBus) {
         std::printf("sizeof(RuntimeSystem) = %zu bytes\n", sizeof(RuntimeSystem));
     }
-    
+
     RuntimeSystem& softReset() noexcept {
         oCPU.softReset();
         oBus.softReset();
@@ -32,13 +32,13 @@ int main() {
 
     // Define a system that uses the SimpleMemory realisation of BusDevice.
 
-    static CompileTimeSystem<Bus::SimpleMemory, MOS6502<Bus::SimpleMemory>> system;
+    static CompileTimeSystem<MOS6502, Bus::SimpleMemory> system;
 
     // Initial state.
 
     system.showStatus();
     int const UNROLL = 10;
-    
+
     // Singe Operation Test
     {
         size_t const LOOPS  = 10000;
@@ -54,11 +54,11 @@ int main() {
         // Warm the caches
         system.runFrom(START);
 
-        // Time many runs              
+        // Time many runs
         size_t iCount = LOOPS * LENGTH * UNROLL / BYTES_PER_OP;
         auto tStart = std::chrono::high_resolution_clock::now();
 
-        for (size_t i = 0; i < LOOPS; ++i) {     
+        for (size_t i = 0; i < LOOPS; ++i) {
             system.runFrom(START);
             system.runFrom(START);
             system.runFrom(START);

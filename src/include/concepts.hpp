@@ -51,12 +51,15 @@ namespace C6502PP {
     /**
      * Processor
      *
-     * Defines Device with constructor dependency on BusDevice
+     * Defines Device with constructor dependency on BusDevice.
+     * NOTE: Although the Processor must be constructable from the BusDevice reference, it must not invoke
+     * any behaviours from construction as there can be no guarantee it has been initialised.
      */
     template<typename D, typename B>
     concept Processor = Device<D> && BusDevice<B> && std::constructible_from<D, B&> && requires(D d, Address address) {
         { d.setProgramCounter(address) } noexcept -> std::same_as<D&>;
         { d.getProgramCounter() } noexcept -> std::same_as<Address>;
+        { d.run() } noexcept -> std::same_as<D&>;
     };
 
 }
