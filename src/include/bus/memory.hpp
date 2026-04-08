@@ -36,7 +36,7 @@ public:
     SimpleMemory& softReset() noexcept {
         return *this;
     }
-    
+
     SimpleMemory& hardReset() noexcept {
         std::memset(aBytes, 0, MEM_SIZE);
         return *this;
@@ -60,28 +60,22 @@ public:
 /**
  * Provide a runtime abstraction for comparison purposes.
  */
-struct RuntimeAbstractDevice {
-
-    virtual ~RuntimeAbstractDevice() {};
-    virtual RuntimeAbstractDevice& softReset() noexcept = 0;
-    virtual RuntimeAbstractDevice& hardReset() noexcept = 0;
+class AbstractMemory {
+public:
+    virtual ~AbstractMemory() {};
+    virtual AbstractMemory& softReset() noexcept = 0;
+    virtual AbstractMemory& hardReset() noexcept = 0;
     virtual Byte readByte(Address iAddress) const noexcept = 0;
     virtual void writeByte(Address iAddress, Byte iByte) noexcept = 0;
+    virtual AbstractMemory& blockFill(Address iFrom, Word iLength, Byte iValue) noexcept = 0;
     virtual size_t loadImage(char const* sImage, Address iLocation = 0) = 0;
+
+    // To foil LTO, we hide direct visibility of what will be created.
+    static AbstractMemory* createRuntimeMemory();
+    static void destroyRuntimeMemory(AbstractMemory* oMemory);
 };
 
-// Methods not immediately inline
-struct RuntimeSimpleMemory : public RuntimeAbstractDevice {
-    Byte bytes[MEM_SIZE] = { 0 };
-    
-    ~RuntimeSimpleMemory() {}
-    
-    Byte readByte(uint16_t address) const noexcept;
-    void writeByte(Address address, Byte value) noexcept;
-    RuntimeSimpleMemory& softReset() noexcept;
-    RuntimeSimpleMemory& hardReset() noexcept;    
-    size_t loadImage(char const* sImage, Address iLocation = 0);
-};
+
 
 
 }

@@ -6,35 +6,54 @@
 
 using namespace C6502PP;
 
-/*
-struct RuntimeSystem {
-    alignas(NativeCacheLine) CPU<Bus::RuntimeAbstractDevice&> oCPU;
-    Bus::RuntimeAbstractDevice& oBus;
-
-    RuntimeSystem(Bus::RuntimeAbstractDevice* oBus) : oCPU(*oBus), oBus(*oBus) {
-        std::printf("sizeof(RuntimeSystem) = %zu bytes\n", sizeof(RuntimeSystem));
+struct PerOpcodeCountObserver {
+    size_t aCounts[256] = { 0 };
+    inline Byte observe(Byte value) noexcept {
+        ++aCounts[value];
+        return value;
     }
 
-    RuntimeSystem& softReset() noexcept {
-        oCPU.softReset();
-        oBus.softReset();
-        return *this;
-    }
-
-    RuntimeSystem& hardReset() noexcept {
-        oCPU.hardReset();
-        oBus.hardReset();
-        return *this;
-    }
+    void dumpStats() const noexcept;
+    void reset() noexcept;
 };
-*/
+
+void PerOpcodeCountObserver::dumpStats() const noexcept
+{
+    for (unsigned i = 0; i < 256; ++i) {
+        if (aCounts[i] > 0) {
+            printf(
+                "0x%02X => %zu\n", i, aCounts[i]
+            );
+        }
+    }
+}
+
+void PerOpcodeCountObserver::reset() noexcept
+{
+    for (unsigned i = 0; i < 256; ++i) {
+        aCounts[i] = 0;
+    }
+}
+
+#ifdef STATIC_SYSTEM
+    // Fast, 64KB+ on stack/heap, no virtual calls
+    using SystemType = CompileTimeSystem<MOS6502, Bus::SimpleMemory>;
+#else
+    // Flexible, 40 bytes, virtual bus calls
+    using SystemType = RuntimeSystem<MOS6502, Bus::AbstractMemory>;
+#endif
+
 int main() {
 
     // Define a system that uses the SimpleMemory realisation of BusDevice.
 
-    static CompileTimeSystem<MOS6502, Bus::SimpleMemory> system;
+    // static CompileTimeSystem<MOS6502, Bus::SimpleMemory, PerOpcodeCountObserver> system;
 
-    // Initial state.
+    // static CompileTimeSystem<MOS6502, Bus::SimpleMemory> system;
+
+    // static RuntimeSystem<MOS6502, Bus::AbstractMemory> system;
+
+    static SystemType system;
 
     system.showStatus();
     int const UNROLL = 10;
@@ -93,6 +112,8 @@ int main() {
     Address const KLAUS_START    = 0x400;
     if (iROMSize) {
         printf("Loaded %s\nBeginning execution from 0x%04X\n", sROM, (unsigned)KLAUS_START);
+
+        system.oOpcodeObserver.reset();
 
         // cache warmup
         system.runFrom(KLAUS_START);

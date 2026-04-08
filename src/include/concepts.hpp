@@ -49,6 +49,28 @@ namespace C6502PP {
     concept BusDevice = Device<T> && ByteAccessible<T>;
 
     /**
+     * FetchedOpcodeObserver
+     *
+     * Observes fetched opcodes in flight.
+     */
+    template<typename T>
+    concept FetchedOpcodeObserver = requires(T t, Byte value) {
+        { t.observe(value) } noexcept -> std::convertible_to<Byte>;
+        { t.dumpStats() } noexcept;
+        { t.reset() } noexcept;
+    };
+
+    /**
+     * Default
+     */
+    struct PassthroughOpcodeObserver {
+        // Marked constexpr/inline to facilitate total elimination
+        inline constexpr Byte observe(Byte value) const noexcept { return value; }
+        inline constexpr void dumpStats() const noexcept { }
+        inline constexpr void reset() const noexcept { }
+    };
+
+    /**
      * Processor
      *
      * Defines Device with constructor dependency on BusDevice.

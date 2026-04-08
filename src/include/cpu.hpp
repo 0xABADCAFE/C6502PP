@@ -10,7 +10,7 @@ namespace C6502PP {
     /**
      * MOS6502
      */
-    template <BusDevice Bus>
+    template <BusDevice Bus, FetchedOpcodeObserver OpcodeObserver = PassthroughOpcodeObserver>
     class MOS6502 {
 
     private:
@@ -19,15 +19,22 @@ namespace C6502PP {
 
         Bus &oOutside;
 
+        OpcodeObserver& oOpcodeObserver;
+
         Address iProgramCounter = {0};
         Byte iAccumulator = {0};
-        Byte iStatus = {0};
+        Byte iStatus = {F_ZERO};
         Byte iXIndex = {0};
         Byte iYIndex = {0};
-        Byte iStackPointer = {0};
+        Byte iStackPointer = {STACK_TOP - STACK_BASE};
 
     public:
-        MOS6502(Bus& oBus): oOutside(oBus) { reset(); }
+        MOS6502(Bus& oBus, OpcodeObserver& oOpcodeObserver):
+            oOutside(oBus),
+            oOpcodeObserver(oOpcodeObserver)
+        {
+            // Does not call reset() since we are not allowed to access the bus here.
+        }
 
         void reset() noexcept {
             iAccumulator    = 0;
@@ -51,7 +58,7 @@ namespace C6502PP {
         Address getProgramCounter() const noexcept {
             return iProgramCounter;
         }
-        
+
         MOS6502& setProgramCounter(Address iAddress) noexcept {
             iProgramCounter = iAddress;
             return *this;

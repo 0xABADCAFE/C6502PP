@@ -2,15 +2,13 @@
 
 #define size(NAME) iProgramCounter += SIZE_ ## NAME
 
-//#define INTERPRET_SWITCH
-
 #ifdef INTERPRET_SWITCH // switch-case
 #   define OP(NAME)
 #   define handle(NAME) case NAME: asm("# case " #NAME ": -->");
-#   define dispatch() /*++iCount;*/ break;
+#   define dispatch() break;
 #   define begin() for (;;) switch (oOutside.readByte(iProgramCounter))
 #   define done()
-#   define illegal() default: return iCount;
+#   define illegal() default: return *this;
 
 #else // Jump Table interpeter
 
@@ -23,7 +21,7 @@ using Jump = uint16_t;
 #   define OP(NAME) L_ ## NAME
 #   define handle(NAME) OP(NAME): asm("# handle(" #NAME ") -->");
 #   define JTE(NAME)  (Jump) ((uint8_t const*)&&OP(NAME) - (uint8_t const*)&&begin_interpreter)
-#   define dispatch() /*++iCount;*/ goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOutside.readByte(iProgramCounter)])
+#   define dispatch() /*++iCount;*/ goto *((uint8_t*)&&begin_interpreter + aJumpTable[oOpcodeObserver.observe(oOutside.readByte(iProgramCounter))])
 #   define begin() \
     begin_interpreter: \
     dispatch();
@@ -307,13 +305,15 @@ using Jump = uint16_t;
             JTE(BAD), // 0xFF - illegal opcode
 
         };
+
 #endif
 
-        Word iAddress;
-        Byte iValue, iCarry;
-
+#ifndef BUS_UNPINNED
         // incendiary hot
         auto& __restrict__ oOutside = this->oOutside;
+#endif
+        Word iAddress;
+        Byte iValue, iCarry;
 
         begin() {
 

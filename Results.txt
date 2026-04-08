@@ -1,0 +1,103 @@
+/////////////////////////////////////////////////////////////////////////////////////
+
+Test System 2018 i7-7500U, 2.7GHz (3.5GHz max)
+
+- Performance mode
+- Use last of 3 sequential runs for each test.
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+PHP8 (NoJIT) SixPhphive02
+
+NOP 4.31 MIPS
+Klaus 3.07 MIPS
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+Initial C++ port, Runtime Abstracted
+
+sizeof(RuntimeSystem) = 40 bytes
+PC: 0x0000 => 0x00
+SP: 0x01FF => 0x00
+A: 0x00 [   0]
+X: 0x00 [   0]
+Y: 0x00 [   0]
+F: [- - | - - - Z -]
+Ran 3276800000 0xEA insructions in 7558197743 nanoseconds [433.543 MIPS]
+Loaded data/rom/diagnostic/6502_functional_test.bin
+Beginning execution from 0x0400
+Klaus Test Passed! Ran 306480490 insructions in 1655242569 nanoseconds [185.157 MIPS]
+PC: 0x3469 => 0x4C
+SP: 0x01FF => 0x34
+A: 0xF0 [ -16]
+X: 0x0E [  14]
+Y: 0xFF [  -1]
+F: [N V | - - - - C]
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+C++ First Compile Time Absrtracted
+
+sizeof(CompileTimeSystem) = 65664 bytes
+PC: 0x0000 => 0x00
+SP: 0x01FF => 0x00
+A: 0x00 [   0]
+X: 0x00 [   0]
+Y: 0x00 [   0]
+F: [- - | - - - Z -]
+Ran 3276800000 0xEA insructions in 6257734090 nanoseconds [523.640 MIPS]
+Loaded data/rom/diagnostic/6502_functional_test.bin
+Beginning execution from 0x0400
+Klaus Test Passed! Ran 306480490 insructions in 1039787680 nanoseconds [294.753 MIPS]
+PC: 0x3469 => 0x4C
+SP: 0x01FF => 0x34
+A: 0xF0 [ -16]
+X: 0x0E [  14]
+Y: 0xFF [  -1]
+F: [N V | - - - - C]
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+C++ Compile Time Absrtracted, Bus Pinned
+
+sizeof(CompileTimeSystem) = 65664 bytes
+PC: 0x0000 => 0x00
+SP: 0x01FF => 0x00
+A: 0x00 [   0]
+X: 0x00 [   0]
+Y: 0x00 [   0]
+F: [- - | - - - Z -]
+Ran 3276800000 0xEA insructions in 5757261139 nanoseconds [569.160 MIPS]
+Loaded data/rom/diagnostic/6502_functional_test.bin
+Beginning execution from 0x0400
+Klaus Test Passed! Ran 306480490 insructions in 1058814890 nanoseconds [289.456 MIPS]
+PC: 0x3469 => 0x4C
+SP: 0x01FF => 0x34
+A: 0xF0 [ -16]
+X: 0x0E [  14]
+Y: 0xFF [  -1]
+F: [N V | - - - - C]
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+C++ Compile Time Abstracted, Bus Pinned, Threaded Dispatch, LTO
+
+sizeof(CompileTimeSystem) = 65664 bytes
+PC: 0x0000 => 0x00
+SP: 0x01FF => 0x00
+A: 0x00 [   0]
+X: 0x00 [   0]
+Y: 0x00 [   0]
+F: [- - | - - - Z -]
+Ran 3276800000 0xEA insructions in 4300637347 nanoseconds [761.934 MIPS]
+Loaded data/rom/diagnostic/6502_functional_test.bin
+Beginning execution from 0x0400
+Klaus Test Passed! Ran 306480490 insructions in 677751342 nanoseconds [452.202 MIPS]
+PC: 0x3469 => 0x4C
+SP: 0x01FF => 0x34
+A: 0xF0 [ -16]
+X: 0x0E [  14]
+Y: 0xFF [  -1]
+F: [N V | - - - - C]
+
+
