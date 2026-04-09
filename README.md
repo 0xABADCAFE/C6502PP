@@ -96,7 +96,7 @@ You don't have to read this, but I hope you enjoy the folly if you do. Strap in.
 
 ### Origin Story
 
-It was lockdown 2020 and _SixPhphive02_ was originally written for amusement and as an experiment in how you might go about such a thing in a language like PHP. The end result wasn't too bad and didn't stray too far away from good practise:
+In 2023 and _SixPhphive02_ was originally written for amusement and as an experiment in how you might go about such a thing in a language like PHP. The end result wasn't too bad and didn't stray too far away from good practise:
 
 - There were interfaces that were incrementally extended and merged, e.g.
     - _IDevice_ that defined reset behaviours.
