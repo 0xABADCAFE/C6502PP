@@ -1,9 +1,12 @@
 ```
-            =========================
-              ┏━╸┏━┓┏━╸┏━┓┏━┓┏━┓┏━┓
-              ┃  ┣━┓┗━┓┃┃┃┏━┛┣━┛┣━┛
-              ┗━╸┗━┛┗━┛┗━┛┗━╸╹  ╹
-            =========================
+             | | | | | | | | | | | |
+           +=^=^=^=^=^=^=^=^=^=^=^=^=+
+           |  ┏━╸┏━┓┏━╸┏━┓┏━┓┏━┓┏━┓  |
+           |  ┃  ┣━┓┗━┓┃┃┃┏━┛┣━┛┣━┛ C|
+           |  ┗━╸┗━┛┗━┛┗━┛┗━╸╹  ╹    |
+           +=v=v=v=v=v=v=v=v=v=v=v=v=+
+             | | | | | | | | | | | |
+
             SixPhphive02 Goes Native!
 ```
 # C6502PP
@@ -11,39 +14,61 @@
 
 ## What
 A C++ implementation of [SixPhphive02](https://github.com/0xABADCAFE/sixphphive02)
-- Compile Time Abstraction, uses templates and concepts in place of polymorphism and interfaces.
-- Supports original switch/case or computed goto jump table.
-- Achieves ~147x the performance of the Elephpant powered original on the same hardware.
 
-## Why
+- Compile Time Abstracted
+- Uses _templates_ and _concepts_ in place of runtime polymorphism and interfaces.
+- Achieves **177x** the peak performance and **147x** of the Elephpant powered original on the same hardware.
+
+## Why?
 Mainly a nerdsnipe, but also an excuse to play with a hypergolic mix of C++20 concepts and low level dirty GCC-isms.
 
 ## A Journey
 
-### Origin
+### Origin Story
 
-It was lockdown and SixPhphive02 was originally written for amusement and as an experiment in how you might go about such a thing in a language like PHP. The end result wasn't too bad and didn't stray too far away from good practise:
+It was lockdown 2020 and SixPhphive02 was originally written for amusement and as an experiment in how you might go about such a thing in a language like PHP. The end result wasn't too bad and didn't stray too far away from good practise:
 
-- There were interfaces that were incrementally extended and merged, e.g. _IDevice_ that defined reset behaviours, _IByteAccessible_ that defined read/write behaviours, _IBusDevice_ that merged them and a _IProcessor_ interface that extended _IDevice_ adding more specific behaviours for a CPU.
-- There were concrete implementations, e.g. a 6502 implementation of _IProcessor_, RAM and ROM implementations of _IBusDevice_ and even a PageMapped device that managed a collection of other _IBusDevice_ instances that lived at different address.
-- The CPU class accepted an _IBusDevice_ implementation as a constructor dependency to keep things neatly decoupled.
-- The CPU class implemented a basic interpreter that in a loop pulled the next instuction byte from the bus and a _switch/case_ to handle the instruction.
+- There were interfaces that were incrementally extended and merged, e.g.
+    - _IDevice_ that defined reset behaviours.
+    - _IByteAccessible_ that defined read/write behaviours.
+    - _IBusDevice_ union of _IDevice_ and _IByteAccessible_.
+    - _IProcessor_ interface that extended _IDevice_ adding more specific behaviours for a CPU.
 
-To test the performance, two benchmarks were ran.
+- There were concrete implementations, e.g.
+    - A 6502 implementation of _IProcessor_ that implemented an interpreter loop that pulled the next instuction byte from the bus and a _switch/case_ to handle the it.
+    - RAM and ROM implementations of _IBusDevice_
+    - A PageMapped _IBusDevice_ that managed a collection of the other _IBusDevice_ instances that lived at different address, allowing a system of components to be assembled.
+    - A Bus level debug adapter _IBusDevice_ that could intercept and log all IO because nothing says awesome quite like a 2GiB debug log from a 64KiB addressable system.
 
-- The simplest possible instruction, NOP, was repeatedly executed in blocks of 32768 to get a baseline for the fastest throughtput.
-- The KlausD diagnostic ROM (used to validate the emulation was correct) was ran to completion and timed.
+These were plumbed together using standard dependency injection:
+
+- The CPU accepted an _IBusDevice_ implementation as a constructor dependency to keep things neatly decoupled.
+
+As I was not an 6502 expert, the famous [Klaus Dormann](https://github.com/Klaus2m5/6502_65C02_functional_tests) diagnostic ROM was used to validate the emulation was correct, including all documented bugs:
+
+- This tests every legal opcode and deadends into various endless loops for failures.
+- If all goes well, it goes into an infinite loop at address 0x3469.
+
+The handler for unconditional branch was designed to exit if a branch jumps back to itself, meaning that the test exits and the test verified by checking the program counter.
+
+To test the performance, two benchmarks were ran:
+
+- NOP was repeatedly executed in blocks of 32768 to get a baseline for what should be the fastest throughtput.
+- The Klaus Dormann diagnostic was ran to completion (30648049 instructions up to and including the unconditional branch at 0x3469) and timed.
 
 Knowing the total instruction counts for each, on a 2018 i7-7500U @ 3.5GHz running PHP 8.1 (at the time) without JIT:
 
 - NOP peaked at 4.31 MIPS
 - Klaus D diagnostic achieved 3.07 MIPS
 
-If I am honest, this was actually better than I expected.
+If I am honest, this was actually better than I expected and is significantly faster than the original 6502 was. At 1MHz:
+
+- NOP takes 2 cycles, implying a 0.5 MIPS peak.
+- Real code is typically quoted at ~0.4 MIPS
 
 ### Today
 
-It was Easter and I wanted to mess around with something new but I didn't want the cognitive overhead of thinking what, so I thought I'd port SixPhphive02 to C++. 
+It was Easter weekend and I wanted to mess around with something new but I didn't want the cognitive overhead of thinking what, so I thought I'd port SixPhphive02 to C++. 
 
 ### Attempt 1
 
