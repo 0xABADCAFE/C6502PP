@@ -1,8 +1,7 @@
 #ifdef _INTERNALS_INCLUDES_
 
-#define size(NAME) iProgramCounter += SIZE_ ## NAME
-
 #ifdef INTERPRET_SWITCH // switch-case
+#   define size(NAME) iProgramCounter += SIZE_ ## NAME
 #   define OP(NAME)
 #   define handle(NAME) case NAME: asm("# case " #NAME ": -->");
 #   define dispatch() break;
@@ -11,6 +10,8 @@
 #   define illegal() default: return *this;
 
 #else // Jump Table interpeter
+
+#define size(NAME) iProgramCounter += SIZE_ ## NAME
 
 #   ifdef WIDE_JUMP
 using Jump = uint32_t;
@@ -39,6 +40,17 @@ using Jump = uint16_t;
             iAddress, \
             shiftRightWithCarry(oOutside.readByte((iAddress = addr))) \
         )
+
+// Addressing mode macros. These call the static inline functions passing the const qualified paramters
+// to assist with inlining using any pinned values.
+#define zp()  addrZeroPageByte(oOutside, iProgramCounter)
+#define ab()  addrAbsoluteByte(oOutside, iProgramCounter)
+#define abx() addrAbsoluteXByte(oOutside, iProgramCounter, iXIndex)
+#define aby() addrAbsoluteYByte(oOutside, iProgramCounter, iYIndex)
+#define zpx() addrZeroPageXByte(oOutside, iProgramCounter, iXIndex)
+#define zpy() addrZeroPageYByte(oOutside, iProgramCounter, iYIndex)
+#define ix()  addrPreIndexZeroPageXByte(oOutside, iProgramCounter, iXIndex)
+#define iy()  addrPostIndexZeroPageYByte(oOutside, iProgramCounter, iYIndex)
 
     /**
      * Main run entry point. We need to make this interruptable, really.
@@ -303,15 +315,17 @@ using Jump = uint16_t;
             JTE(SBC_ABX), // 0xFD
             JTE(INC_ABX), // 0xFE
             JTE(BAD), // 0xFF - illegal opcode
-
         };
 
 #endif
 
-#ifndef BUS_UNPINNED
-        // incendiary hot
-        auto& __restrict__ oOutside = this->oOutside;
+#ifndef UNPINNED
+        // incendiary hot values to pin
+        auto& __restrict__ oOutside = this->oOutside;        
+        // inceniary hot values to pin
+        Address iProgramCounter = this->iProgramCounter;
 #endif
+
         Word iAddress;
         Byte iValue, iCarry;
 
@@ -327,86 +341,86 @@ using Jump = uint16_t;
             }
 
             handle(LDA_ZP) {
-                updateNZ(iAccumulator = load(addrZeroPageByte()));
+                updateNZ(iAccumulator = load(zp()));
                 size(LDA_ZP);
                 dispatch();
             }
 
             handle(LDA_ZPX) {
-                updateNZ(iAccumulator = load(addrZeroPageXByte()));
+                updateNZ(iAccumulator = load(zpx()));
                 size(LDA_ZPX);
                 dispatch();
             }
 
             handle(LDA_AB) {
-                updateNZ(iAccumulator = load(addrAbsoluteByte()));
+                updateNZ(iAccumulator = load(ab()));
                 size(LDA_AB);
                 dispatch();
             }
 
             handle(LDA_ABX) {
-                updateNZ(iAccumulator = load(addrAbsoluteXByte()));
+                updateNZ(iAccumulator = load(abx()));
                 size(LDA_ABX);
                 dispatch();
             }
 
             handle(LDA_ABY) {
-                updateNZ(iAccumulator = load(addrAbsoluteYByte()));
+                updateNZ(iAccumulator = load(aby()));
                 size(LDA_ABY);
                 dispatch();
             }
 
             handle(LDA_IX) {
-                updateNZ(iAccumulator = load(addrPreIndexZeroPageXByte()));
+                updateNZ(iAccumulator = load(ix()));
                 size(LDA_IX);
                 dispatch();
             }
 
             handle(LDA_IY) {
-                updateNZ(iAccumulator = load(addrPostIndexZeroPageYByte()));
+                updateNZ(iAccumulator = load(iy()));
                 size(LDA_IY);
                 dispatch();
             }
 
             // Store Accumulator
             handle(STA_ZP) {
-                store(addrZeroPageByte(),  iAccumulator);
+                store(zp(),  iAccumulator);
                 size(STA_ZP);
                 dispatch();
             }
 
             handle(STA_ZPX) {
-                store(addrZeroPageXByte(), iAccumulator);
+                store(zpx(), iAccumulator);
                 size(STA_ZPX);
                 dispatch();
             }
 
             handle(STA_AB) {
-                store(addrAbsoluteByte(),  iAccumulator);
+                store(ab(),  iAccumulator);
                 size(STA_AB);
                 dispatch();
             }
 
             handle(STA_ABX) {
-                store(addrAbsoluteXByte(), iAccumulator);
+                store(abx(), iAccumulator);
                 size(STA_ABX);
                 dispatch();
             }
 
             handle(STA_ABY) {
-                store(addrAbsoluteYByte(), iAccumulator);
+                store(aby(), iAccumulator);
                 size(STA_ABY);
                 dispatch();
             }
 
             handle(STA_IX) {
-                store(addrPreIndexZeroPageXByte(),  iAccumulator);
+                store(ix(),  iAccumulator);
                 size(STA_IX);
                 dispatch();
             }
 
             handle(STA_IY) {
-                store(addrPostIndexZeroPageYByte(), iAccumulator);
+                store(iy(), iAccumulator);
                 size(STA_IY);
                 dispatch();
             }
@@ -419,44 +433,44 @@ using Jump = uint16_t;
             }
 
             handle(LDX_ZP) {
-                updateNZ(iXIndex = load(addrZeroPageByte()));
+                updateNZ(iXIndex = load(zp()));
                 size(LDX_ZP);
                 dispatch();
             }
 
             handle(LDX_ZPY) {
-                updateNZ(iXIndex = load(addrZeroPageYByte()));
+                updateNZ(iXIndex = load(zpy()));
                 size(LDX_ZPY);
                 dispatch();
             }
 
             handle(LDX_AB) {
-                updateNZ(iXIndex = load(addrAbsoluteByte()));
+                updateNZ(iXIndex = load(ab()));
                 size(LDX_AB);
                 dispatch();
             }
 
             handle(LDX_ABY) {
-                updateNZ(iXIndex = load(addrAbsoluteYByte()));
+                updateNZ(iXIndex = load(aby()));
                 size(LDX_ABY);
                 dispatch();
             }
 
             // Store X
             handle(STX_ZP) {
-                store(addrZeroPageByte(),  iXIndex);
+                store(zp(),  iXIndex);
                 size(STX_ZP);
                 dispatch();
             }
 
             handle(STX_ZPY) {
-                store(addrZeroPageYByte(), iXIndex);
+                store(zpy(), iXIndex);
                 size(STX_ZPY);
                 dispatch();
             }
 
             handle(STX_AB) {
-                store(addrAbsoluteByte(),  iXIndex);
+                store(ab(),  iXIndex);
                 size(STX_AB);
                 dispatch();
             }
@@ -469,44 +483,44 @@ using Jump = uint16_t;
             }
 
             handle(LDY_ZP) {
-                updateNZ(iYIndex = load(addrZeroPageByte()));
+                updateNZ(iYIndex = load(zp()));
                 size(LDY_ZP);
                 dispatch();
             }
 
             handle(LDY_ZPX) {
-                updateNZ(iYIndex = load(addrZeroPageXByte()));
+                updateNZ(iYIndex = load(zpx()));
                 size(LDY_ZPX);
                 dispatch();
             }
 
             handle(LDY_AB) {
-                updateNZ(iYIndex = load(addrAbsoluteByte()));
+                updateNZ(iYIndex = load(ab()));
                 size(LDY_AB);
                 dispatch();
             }
 
             handle(LDY_ABX) {
-                updateNZ(iYIndex = load(addrAbsoluteXByte()));
+                updateNZ(iYIndex = load(abx()));
                 size(LDY_ABX);
                 dispatch();
             }
 
             // Store Y
             handle(STY_ZP) {
-                store(addrZeroPageByte(),  iYIndex);
+                store(zp(),  iYIndex);
                 size(STY_ZP);
                 dispatch();
             }
 
             handle(STY_ZPX) {
-                store(addrZeroPageXByte(), iYIndex);
+                store(zpx(), iYIndex);
                 size(STY_ZPX);
                 dispatch();
             }
 
             handle(STY_AB) {
-                store(addrAbsoluteByte(),  iYIndex);
+                store(ab(),  iYIndex);
                 size(STY_AB);
                 dispatch();
             }
@@ -520,43 +534,43 @@ using Jump = uint16_t;
             }
 
             handle(CMP_ZP) {
-                cmpByte(iAccumulator, load(addrZeroPageByte()));
+                cmpByte(iAccumulator, load(zp()));
                 size(CMP_ZP);
                 dispatch();
             }
 
             handle(CMP_ZPX) {
-                cmpByte(iAccumulator, load(addrZeroPageXByte()));
+                cmpByte(iAccumulator, load(zpx()));
                 size(CMP_ZPX);
                 dispatch();
             }
 
             handle(CMP_AB) {
-                cmpByte(iAccumulator, load(addrAbsoluteByte()));
+                cmpByte(iAccumulator, load(ab()));
                 size(CMP_AB);
                 dispatch();
             }
 
             handle(CMP_ABX) {
-                cmpByte(iAccumulator, load(addrAbsoluteXByte()));
+                cmpByte(iAccumulator, load(abx()));
                 size(CMP_ABX);
                 dispatch();
             }
 
             handle(CMP_ABY) {
-                cmpByte(iAccumulator, load(addrAbsoluteYByte()));
+                cmpByte(iAccumulator, load(aby()));
                 size(CMP_ABY);
                 dispatch();
             }
 
             handle(CMP_IX) {
-                cmpByte(iAccumulator, load(addrPreIndexZeroPageXByte()));
+                cmpByte(iAccumulator, load(ix()));
                 size(CMP_IX);
                 dispatch();
             }
 
             handle(CMP_IY) {
-                cmpByte(iAccumulator, load(addrPostIndexZeroPageYByte()));
+                cmpByte(iAccumulator, load(iy()));
                 size(CMP_IY);
                 dispatch();
             }
@@ -568,13 +582,13 @@ using Jump = uint16_t;
             }
 
             handle(CPX_ZP) {
-                cmpByte(iXIndex, load(addrZeroPageByte()));
+                cmpByte(iXIndex, load(zp()));
                 size(CPX_ZP);
                 dispatch();
             }
 
             handle(CPX_AB) {
-                cmpByte(iXIndex, load(addrAbsoluteByte()));
+                cmpByte(iXIndex, load(ab()));
                 size(CPX_AB);
                 dispatch();
             }
@@ -586,13 +600,13 @@ using Jump = uint16_t;
             }
 
             handle(CPY_ZP) {
-                cmpByte(iYIndex, load(addrZeroPageByte()));
+                cmpByte(iYIndex, load(zp()));
                 size(CPY_ZP);
                 dispatch();
             }
 
             handle(CPY_AB) {
-                cmpByte(iYIndex, load(addrAbsoluteByte()));
+                cmpByte(iYIndex, load(ab()));
                 size(CPY_AB);
                 dispatch();
             }
@@ -782,7 +796,7 @@ using Jump = uint16_t;
             }
 
             handle(DEC_ZP) {
-                iAddress = addrZeroPageByte();
+                iAddress = zp();
                 iValue   = (load(iAddress) - 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -791,7 +805,7 @@ using Jump = uint16_t;
             }
 
             handle(DEC_ZPX) {
-                iAddress = addrZeroPageXByte();
+                iAddress = zpx();
                 iValue   = (load(iAddress) - 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -800,7 +814,7 @@ using Jump = uint16_t;
             }
 
             handle(DEC_AB) {
-                iAddress = addrAbsoluteByte();
+                iAddress = ab();
                 iValue   = (load(iAddress) - 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -809,7 +823,7 @@ using Jump = uint16_t;
             }
 
             handle(DEC_ABX) {
-                iAddress = addrAbsoluteXByte();
+                iAddress = abx();
                 iValue   = (load(iAddress) - 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -832,7 +846,7 @@ using Jump = uint16_t;
             }
 
             handle(INC_ZP) {
-                iAddress = addrZeroPageByte();
+                iAddress = zp();
                 iValue   = (load(iAddress) + 1);
                 updateNZ(iValue );
                 store(iAddress, iValue);
@@ -841,7 +855,7 @@ using Jump = uint16_t;
             }
 
             handle(INC_ZPX) {
-                iAddress = addrZeroPageXByte();
+                iAddress = zpx();
                 iValue   = (load(iAddress) + 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -850,7 +864,7 @@ using Jump = uint16_t;
             }
 
             handle(INC_AB) {
-                iAddress = addrAbsoluteByte();
+                iAddress = ab();
                 iValue   = (load(iAddress) + 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -859,7 +873,7 @@ using Jump = uint16_t;
             }
 
             handle(INC_ABX) {
-                iAddress = addrAbsoluteXByte();
+                iAddress = abx();
                 iValue   = (load(iAddress) + 1);
                 updateNZ(iValue);
                 store(iAddress, iValue);
@@ -875,43 +889,43 @@ using Jump = uint16_t;
             }
 
             handle(AND_ZP) {
-                updateNZ(iAccumulator &= load(addrZeroPageByte()));
+                updateNZ(iAccumulator &= load(zp()));
                 size(AND_ZP);
                 dispatch();
             }
 
             handle(AND_ZPX) {
-                updateNZ(iAccumulator &= load(addrZeroPageXByte()));
+                updateNZ(iAccumulator &= load(zpx()));
                 size(AND_ZPX);
                 dispatch();
             }
 
             handle(AND_AB) {
-                updateNZ(iAccumulator &= load(addrAbsoluteByte()));
+                updateNZ(iAccumulator &= load(ab()));
                 size(AND_AB);
                 dispatch();
             }
 
             handle(AND_ABX) {
-                updateNZ(iAccumulator &= load(addrAbsoluteXByte()));
+                updateNZ(iAccumulator &= load(abx()));
                 size(AND_ABX);
                 dispatch();
             }
 
             handle(AND_ABY) {
-                updateNZ(iAccumulator &= load(addrAbsoluteYByte()));
+                updateNZ(iAccumulator &= load(aby()));
                 size(AND_ABY);
                 dispatch();
             }
 
             handle(AND_IX) {
-                updateNZ(iAccumulator &= load(addrPreIndexZeroPageXByte()));
+                updateNZ(iAccumulator &= load(ix()));
                 size(AND_IX);
                 dispatch();
             }
 
             handle(AND_IY) {
-                updateNZ(iAccumulator &= load(addrPostIndexZeroPageYByte()));
+                updateNZ(iAccumulator &= load(iy()));
                 size(AND_IY);
                 dispatch();
             }
@@ -923,43 +937,43 @@ using Jump = uint16_t;
             }
 
             handle(ORA_ZP) {
-                updateNZ(iAccumulator |= load(addrZeroPageByte()));
+                updateNZ(iAccumulator |= load(zp()));
                 size(ORA_ZP);
                 dispatch();
             }
 
             handle(ORA_ZPX) {
-                updateNZ(iAccumulator |= load(addrZeroPageXByte()));
+                updateNZ(iAccumulator |= load(zpx()));
                 size(ORA_ZPX);
                 dispatch();
             }
 
             handle(ORA_AB) {
-                updateNZ(iAccumulator |= load(addrAbsoluteByte()));
+                updateNZ(iAccumulator |= load(ab()));
                 size(ORA_AB);
                 dispatch();
             }
 
             handle(ORA_ABX) {
-                updateNZ(iAccumulator |= load(addrAbsoluteXByte()));
+                updateNZ(iAccumulator |= load(abx()));
                 size(ORA_ABX);
                 dispatch();
             }
 
             handle(ORA_ABY) {
-                updateNZ(iAccumulator |= load(addrAbsoluteYByte()));
+                updateNZ(iAccumulator |= load(aby()));
                 size(ORA_ABY);
                 dispatch();
             }
 
             handle(ORA_IX) {
-                updateNZ(iAccumulator |= load(addrPreIndexZeroPageXByte()));
+                updateNZ(iAccumulator |= load(ix()));
                 size(ORA_IX);
                 dispatch();
             }
 
             handle(ORA_IY) {
-                updateNZ(iAccumulator |= load(addrPostIndexZeroPageYByte()));
+                updateNZ(iAccumulator |= load(iy()));
                 size(ORA_IY);
                 dispatch();
             }
@@ -971,43 +985,43 @@ using Jump = uint16_t;
             }
 
             handle(EOR_ZP) {
-                updateNZ(iAccumulator ^= load(addrZeroPageByte()));
+                updateNZ(iAccumulator ^= load(zp()));
                 size(EOR_ZP);
                 dispatch();
             }
 
             handle(EOR_ZPX) {
-                updateNZ(iAccumulator ^= load(addrZeroPageXByte()));
+                updateNZ(iAccumulator ^= load(zpx()));
                 size(EOR_ZPX);
                 dispatch();
             }
 
             handle(EOR_AB) {
-                updateNZ(iAccumulator ^= load(addrAbsoluteByte()));
+                updateNZ(iAccumulator ^= load(ab()));
                 size(EOR_AB);
                 dispatch();
             }
 
             handle(EOR_ABX) {
-                updateNZ(iAccumulator ^= load(addrAbsoluteXByte()));
+                updateNZ(iAccumulator ^= load(abx()));
                 size(EOR_ABX);
                 dispatch();
             }
 
             handle(EOR_ABY) {
-                updateNZ(iAccumulator ^= load(addrAbsoluteYByte()));
+                updateNZ(iAccumulator ^= load(aby()));
                 size(EOR_ABY);
                 dispatch();
             }
 
             handle(EOR_IX) {
-                updateNZ(iAccumulator ^= load(addrPreIndexZeroPageXByte()));
+                updateNZ(iAccumulator ^= load(ix()));
                 size(EOR_IX);
                 dispatch();
             }
 
             handle(EOR_IY) {
-                updateNZ(iAccumulator ^= load(addrPostIndexZeroPageYByte()));
+                updateNZ(iAccumulator ^= load(iy()));
                 size(EOR_IY);
                 dispatch();
             }
@@ -1022,25 +1036,25 @@ using Jump = uint16_t;
             }
 
             handle(ASL_ZP) {
-                aslMemory(addrZeroPageByte());
+                aslMemory(zp());
                 size(ASL_ZP);
                 dispatch();
             }
 
             handle(ASL_ZPX) {
-                aslMemory(addrZeroPageXByte());
+                aslMemory(zpx());
                 size(ASL_ZPX);
                 dispatch();
             }
 
             handle(ASL_AB) {
-                aslMemory(addrAbsoluteByte());
+                aslMemory(ab());
                 size(ASL_AB);
                 dispatch();
             }
 
             handle(ASL_ABX) {
-                aslMemory(addrAbsoluteXByte());
+                aslMemory(abx());
                 size(ASL_ABX);
                 dispatch();
             }
@@ -1064,25 +1078,25 @@ using Jump = uint16_t;
             }
 
             handle(ROL_ZP) {
-                rolMemory(addrZeroPageByte());
+                rolMemory(zp());
                 size(ROL_ZP);
                 dispatch();
             }
 
             handle(ROL_ZPX) {
-                rolMemory(addrZeroPageXByte());
+                rolMemory(zpx());
                 size(ROL_ZPX);
                 dispatch();
             }
 
             handle(ROL_AB) {
-                rolMemory(addrAbsoluteByte());
+                rolMemory(ab());
                 size(ROL_AB);
                 dispatch();
             }
 
             handle(ROL_ABX) {
-                rolMemory(addrAbsoluteXByte());
+                rolMemory(abx());
                 size(ROL_ABX);
                 dispatch();
             }
@@ -1097,49 +1111,49 @@ using Jump = uint16_t;
             }
 
             handle(ROR_ZP) {
-                rorMemory(addrZeroPageByte());
+                rorMemory(zp());
                 size(ROR_ZP);
                 dispatch();
             }
 
             handle(ROR_ZPX) {
-                rorMemory(addrZeroPageXByte());
+                rorMemory(zpx());
                 size(ROR_ZPX);
                 dispatch();
             }
 
             handle(ROR_AB) {
-                rorMemory(addrAbsoluteByte());
+                rorMemory(ab());
                 size(ROR_AB);
                 dispatch();
             }
 
             handle(ROR_ABX) {
-                rorMemory(addrAbsoluteXByte());
+                rorMemory(abx());
                 size(ROR_ABX);
                 dispatch();
             }
 
             handle(LSR_ZP) {
-                lsrMemory(addrZeroPageByte());
+                lsrMemory(zp());
                 size(LSR_ZP);
                 dispatch();
             }
 
             handle(LSR_ZPX) {
-                lsrMemory(addrZeroPageXByte());
+                lsrMemory(zpx());
                 size(LSR_ZPX);
                 dispatch();
             }
 
             handle(LSR_AB) {
-                lsrMemory(addrAbsoluteByte());
+                lsrMemory(ab());
                 size(LSR_AB);
                 dispatch();
             }
 
             handle(LSR_ABX) {
-                lsrMemory(addrAbsoluteXByte());
+                lsrMemory(abx());
                 size(LSR_ABX);
                 dispatch();
             }
@@ -1154,43 +1168,43 @@ using Jump = uint16_t;
             }
 
             handle(ADC_ZP) {
-                addByteWithCarry(load(addrZeroPageByte()));
+                addByteWithCarry(load(zp()));
                 size(ADC_ZP);
                 dispatch();
             }
 
             handle(ADC_ZPX) {
-                addByteWithCarry(load(addrZeroPageXByte()));
+                addByteWithCarry(load(zpx()));
                 size(ADC_ZPX);
                 dispatch();
             }
 
             handle(ADC_AB) {
-                addByteWithCarry(load(addrAbsoluteByte()));
+                addByteWithCarry(load(ab()));
                 size(ADC_AB);
                 dispatch();
             }
 
             handle(ADC_ABX) {
-                addByteWithCarry(load(addrAbsoluteXByte()));
+                addByteWithCarry(load(abx()));
                 size(ADC_ABX);
                 dispatch();
             }
 
             handle(ADC_ABY) {
-                addByteWithCarry(load(addrAbsoluteYByte()));
+                addByteWithCarry(load(aby()));
                 size(ADC_ABY);
                 dispatch();
             }
 
             handle(ADC_IX){
-                addByteWithCarry(load(addrPreIndexZeroPageXByte()));
+                addByteWithCarry(load(ix()));
                 size(ADC_IX);
                 dispatch();
             }
 
             handle(ADC_IY) {
-                addByteWithCarry(load(addrPostIndexZeroPageYByte()));
+                addByteWithCarry(load(iy()));
                 size(ADC_IY);
                 dispatch();
             }
@@ -1204,49 +1218,49 @@ using Jump = uint16_t;
             }
 
             handle(SBC_ZP) {
-                subByteWithCarry(load(addrZeroPageByte()));
+                subByteWithCarry(load(zp()));
                 size(SBC_ZP);
                 dispatch();
             }
 
             handle(SBC_ZPX) {
-                subByteWithCarry(load(addrZeroPageXByte()));
+                subByteWithCarry(load(zpx()));
                 size(SBC_ZPX);
                 dispatch();
             }
 
             handle(SBC_AB) {
-                subByteWithCarry(load(addrAbsoluteByte()));
+                subByteWithCarry(load(ab()));
                 size(SBC_AB);
                 dispatch();
             }
 
             handle(SBC_ABX) {
-                subByteWithCarry(load(addrAbsoluteXByte()));
+                subByteWithCarry(load(abx()));
                 size(SBC_ABX);
                 dispatch();
             }
 
             handle(SBC_ABY) {
-                subByteWithCarry(load(addrAbsoluteYByte()));
+                subByteWithCarry(load(aby()));
                 size(SBC_ABY);
                 dispatch();
             }
 
             handle(SBC_IX) {
-                subByteWithCarry(load(addrPreIndexZeroPageXByte()));
+                subByteWithCarry(load(ix()));
                 size(SBC_IX);
                 dispatch();
             }
 
             handle(SBC_IY) {
-                subByteWithCarry(load(addrPostIndexZeroPageYByte()));
+                subByteWithCarry(load(iy()));
                 size(SBC_IY);
                 dispatch();
             }
 
             handle(BIT_ZP) {
-                iValue = load(addrZeroPageByte());
+                iValue = load(zp());
                 iStatus &= F_CLR_NZV;
                 iStatus |= (iValue & (F_NEGATIVE | F_OVERFLOW)) | (
                     iValue & iAccumulator ? 0 : F_ZERO
@@ -1256,7 +1270,7 @@ using Jump = uint16_t;
             }
 
             handle(BIT_AB) {
-                iValue = load(addrAbsoluteByte());
+                iValue = load(ab());
                 iStatus &= F_CLR_NZV;
                 iStatus |= (iValue & (F_NEGATIVE|F_OVERFLOW)) | (
                     iValue & iAccumulator ? 0 : F_ZERO
@@ -1269,9 +1283,10 @@ using Jump = uint16_t;
             handle(JMP_AB) {
                 //iCycles += OP_CYCLES[iOpcode];
 
-                iAddress = readWord(iProgramCounter + 1);
+                iAddress = readWord(oOutside, iProgramCounter + 1);
                 if (iAddress == iProgramCounter) {
                     // Hard Infinite Loop
+                    this->iProgramCounter = iProgramCounter; // restore from shadow
                     return *this;
                 }
                 iProgramCounter = iAddress;
@@ -1280,13 +1295,13 @@ using Jump = uint16_t;
 
             handle(JMP_IN) {
                 // Emulate the 6502 indirect jump bug with respect to page boundaries.
-                Address iPointerAddress = readWord(iProgramCounter + 1);
+                Address iPointerAddress = readWord(oOutside, iProgramCounter + 1);
                 if (0xFF == (iPointerAddress & 0xFF)) {
                     iAddress = load(iPointerAddress);
                     iAddress |= load(iPointerAddress & 0xFF00) << 8;
                     iProgramCounter = iAddress;
                 } else {
-                    iProgramCounter = readWord(iPointerAddress);
+                    iProgramCounter = readWord(oOutside, iPointerAddress);
                 }
                 dispatch();
             }
@@ -1296,7 +1311,7 @@ using Jump = uint16_t;
                 iAddress = (iProgramCounter + 2);
                 push(iAddress >> 8);
                 push(iAddress & 0xFF);
-                iProgramCounter = readWord(iProgramCounter + 1);
+                iProgramCounter = readWord(oOutside, iProgramCounter + 1);
                 dispatch();
             }
 
@@ -1330,7 +1345,7 @@ using Jump = uint16_t;
                 push(iStatus|F_BREAK|F_UNUSED);
 
                 // Reload PC from IRQ vector
-                iProgramCounter = readWord(VEC_IRQ);
+                iProgramCounter = readWord(oOutside, VEC_IRQ);
 
                 // Set interrupted status. Is this the correct location?
                 iStatus |= F_INTERRUPT;
@@ -1340,6 +1355,7 @@ using Jump = uint16_t;
             illegal();
         }
         // Fall through after illegal
+        this->iProgramCounter = iProgramCounter; // restore from shadow
         return *this;
     }
 

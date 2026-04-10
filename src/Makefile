@@ -17,6 +17,7 @@ bench:
 	@echo " Building"
 	@echo "=========================================================="
 	@$(MAKE) runtime_test
+	@$(MAKE) runtime_test_lto
 	@$(MAKE) compiletime_test_sc
 	@$(MAKE) compiletime_test_sc_pin
 	@$(MAKE) compiletime_max
@@ -29,20 +30,26 @@ runtime_test:
 	@echo "\n--- 1. Runtime abstracted, switch/case ---"
 	@$(MAKE) build_run BIN_NAME="test_runtime" FLAGS="$(BENCH_FLAGS_Runtime)"
 
-# 2. Compile Time Abstracted, switch-case, no other frills
+# 2. Runtime Abstracted, switch-case, LTO
+runtime_test_lto:
+	@echo "\n--- 2. Runtime abstracted, switch/case, full LTO ---"
+	@$(MAKE) build_run BIN_NAME="test_runtime_lto" FLAGS="$(BENCH_FLAGS_RuntimeLTO)"
+
+
+# 3. Compile Time Abstracted, switch-case, no other frills
 compiletime_test_sc:
-	@echo "\n--- 2. Compile-time abstracted, switch/case ---"
+	@echo "\n--- 3. Compile-time abstracted, switch/case ---"
 	@$(MAKE) build_run BIN_NAME="test_sc" FLAGS="$(BENCH_FLAGS_StaticSC)"
 
-# 3. Compile Time Abstracted, switch-case, dependency ref pinning
+# 4. Compile Time Abstracted, switch-case, dependency ref pinning
 compiletime_test_sc_pin:
-	@echo "\n--- 3. Compile-time abstracted, switch/case, bus dependency reference pinned ---"
+	@echo "\n--- 4. Compile-time abstracted, switch/case, pinned ---"
 	@$(MAKE) build_run BIN_NAME="test_sc_pin" FLAGS="$(BENCH_FLAGS_StaticSCPin)"
 
-# 4. Compile Time Abstracted, goto and extras
+# 5. Compile Time Abstracted, goto and extras
 compiletime_max:
-	@echo "\n--- 4. Compile-time abstracted, computed goto, bus dependency reference pinned, full LTO ---"
-	@$(MAKE) build_run BIN_NAME="test_max" FLAGS="$(BENCH_FLAGS_StaticMaxGotoLTO)" LDFLAGS="$(BENCH_LDFLAGS_StaticMaxGotoLTO)"
+	@echo "\n--- 5. Compile-time abstracted, computed goto, pinned ---"
+	@$(MAKE) build_run BIN_NAME="test_max" FLAGS="$(BENCH_FLAGS_StaticMaxGoto)" LDFLAGS="$(BENCH_LDFLAGS_StaticMaxGoto)"
 
 # --- Internal Helper Rule ---
 
@@ -60,4 +67,4 @@ print_benchmark_configs:
 	@$(foreach name,$(BENCHMARK_TARGETS),printf '%s|%s|%s\n' '$(name)' '$(BENCH_FLAGS_$(name))' '$(BENCH_LDFLAGS_$(name))';)
 
 clean:
-	rm -f *.o test test_runtime test_sc test_sc_pin test_max bench_Runtime bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto bench_StaticMaxGotoLTO bench_harness
+	rm -f *.o test test_runtime test_runtime_lto test_sc test_sc_pin test_max bench_Runtime bench_RuntimeLTO bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto bench_harness
