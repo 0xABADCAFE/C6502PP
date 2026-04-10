@@ -9,7 +9,7 @@ include benchmark_matrix.mk
 
 # --- The "Evolution of Performance" Suite ---
 
-.PHONY: bench clean build_run build_bench runtime_test compiletime_test_sc compiletime_test_sc_pin compiletime_max print_benchmark_configs
+.PHONY: bench clean build_run build_bench runtime_test runtime_test_lto compiletime_test_sc compiletime_test_sc_lto compiletime_test_sc_pin compiletime_test_sc_pin_lto compiletime_max compiletime_max_lto print_benchmark_configs
 
 # One-shot command to run all benchmarks and keep the binaries
 bench:
@@ -19,8 +19,11 @@ bench:
 	@$(MAKE) runtime_test
 	@$(MAKE) runtime_test_lto
 	@$(MAKE) compiletime_test_sc
+	@$(MAKE) compiletime_test_sc_lto
 	@$(MAKE) compiletime_test_sc_pin
+	@$(MAKE) compiletime_test_sc_pin_lto
 	@$(MAKE) compiletime_max
+	@$(MAKE) compiletime_max_lto
 	@echo "=========================================================="
 	@echo " Completed - Binaries saved as test_*"
 	@echo "=========================================================="
@@ -41,16 +44,30 @@ compiletime_test_sc:
 	@echo "\n--- 3. Compile-time abstracted, switch/case ---"
 	@$(MAKE) build_run BIN_NAME="test_sc" FLAGS="$(BENCH_FLAGS_StaticSC)"
 
-# 4. Compile Time Abstracted, switch-case, dependency ref pinning
+# 4. Compile Time Abstracted, switch-case, full LTO
+compiletime_test_sc_lto:
+	@echo "\n--- 4. Compile-time abstracted, switch/case, full LTO ---"
+	@$(MAKE) build_run BIN_NAME="test_sc_lto" FLAGS="$(BENCH_FLAGS_StaticSCLTO)"
+
+# 5. Compile Time Abstracted, switch-case, dependency ref pinning
 compiletime_test_sc_pin:
-	@echo "\n--- 4. Compile-time abstracted, switch/case, pinned ---"
+	@echo "\n--- 5. Compile-time abstracted, switch/case, pinned ---"
 	@$(MAKE) build_run BIN_NAME="test_sc_pin" FLAGS="$(BENCH_FLAGS_StaticSCPin)"
 
-# 5. Compile Time Abstracted, goto and extras
+# 6. Compile Time Abstracted, switch-case, dependency ref pinning with LTO
+compiletime_test_sc_pin_lto:
+	@echo "\n--- 6. Compile-time abstracted, switch/case, pinned, full LTO ---"
+	@$(MAKE) build_run BIN_NAME="test_sc_pin_lto" FLAGS="$(BENCH_FLAGS_StaticSCPinLTO)"
+
+# 7. Compile Time Abstracted, goto and extras
 compiletime_max:
-	@echo "\n--- 5. Compile-time abstracted, computed goto, pinned ---"
+	@echo "\n--- 7. Compile-time abstracted, computed goto, pinned ---"
 	@$(MAKE) build_run BIN_NAME="test_max" FLAGS="$(BENCH_FLAGS_StaticMaxGoto)" LDFLAGS="$(BENCH_LDFLAGS_StaticMaxGoto)"
 
+# 8. Compile Time Abstracted, goto and extras
+compiletime_max_lto:
+	@echo "\n--- 8. Compile-time abstracted, computed goto, pinned, full LTO ---"
+	@$(MAKE) build_run BIN_NAME="test_max_lto" FLAGS="$(BENCH_FLAGS_StaticMaxGotoLTO)" LDFLAGS="$(BENCH_LDFLAGS_StaticMaxGotoLTO)"
 # --- Internal Helper Rule ---
 
 # Compiles directly to the unique binary name and runs it
@@ -67,4 +84,4 @@ print_benchmark_configs:
 	@$(foreach name,$(BENCHMARK_TARGETS),printf '%s|%s|%s\n' '$(name)' '$(BENCH_FLAGS_$(name))' '$(BENCH_LDFLAGS_$(name))';)
 
 clean:
-	rm -f *.o test test_runtime test_runtime_lto test_sc test_sc_pin test_max bench_Runtime bench_RuntimeLTO bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto bench_harness
+	rm -f *.o test_* bench_Runtime bench_RuntimeLTO bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto bench_harness
