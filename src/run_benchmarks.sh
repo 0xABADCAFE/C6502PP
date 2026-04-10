@@ -2,7 +2,7 @@
 
 # Configuration
 CC="g++"
-BENCH_SECONDS="${BENCH_SECONDS:-30}"
+BENCH_SECONDS="${BENCH_SECONDS:-10}"
 
 # Benchmark metadata: bin_file instr_per_op
 benchmarks=(
@@ -89,4 +89,4 @@ done
 echo "=============================================================================================="
 
 rm "$results_file"
-rm -f bench_Runtime bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto bench_StaticMaxGotoLTO
+rm -f bench_Runtime bench_RuntimeLTO bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto

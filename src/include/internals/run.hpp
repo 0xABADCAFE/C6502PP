@@ -1,7 +1,5 @@
 #ifdef _INTERNALS_INCLUDES_
 
-
-
 #ifdef INTERPRET_SWITCH // switch-case
 #   define size(NAME) iProgramCounter += SIZE_ ## NAME
 #   define OP(NAME)
@@ -321,12 +319,9 @@ using Jump = uint16_t;
 
 #endif
 
-#ifndef BUS_UNPINNED
+#ifndef UNPINNED
         // incendiary hot values to pin
         auto& __restrict__ oOutside = this->oOutside;        
-#endif
-
-#ifndef PC_UNPINNED
         // inceniary hot values to pin
         Address iProgramCounter = this->iProgramCounter;
 #endif
