@@ -9,6 +9,7 @@
 #   define begin() for (;;) switch (oOutside.readByte(iProgramCounter))
 #   define done()
 #   define illegal() default: return *this;
+#   define JAM 0x02
 
 #else // Jump Table interpeter
 
@@ -49,7 +50,7 @@ using Jump = uint16_t;
         alignas(NativeCacheLine) static Jump const aJumpTable[256] __attribute__((section(".text"))) = {
             JTE(BRK), // 0x00
             JTE(ORA_IX), // 0x01
-            JTE(BAD), // 0x02 - illegal opcode
+            JTE(JAM), // 0x02 - JAM (Halt)
             JTE(BAD), // 0x03 - illegal opcode
             JTE(BAD), // 0x04 - illegal opcode
             JTE(ORA_ZP), // 0x05
@@ -1317,6 +1318,10 @@ using Jump = uint16_t;
                 iAddress |= (pull() << 8);
                 iProgramCounter = iAddress;// + 1;
                 dispatch();
+            }
+
+            handle(JAM) {
+                return *this;
             }
 
             handle(BRK) {

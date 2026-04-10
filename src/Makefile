@@ -50,4 +50,4 @@ build_run:
 #	./$(BIN_NAME)
 
 clean:
-	rm -f *.o test test_runtime test_sc test_sc_pin test_max
+        rm -f *.o test test_runtime test_sc test_sc_pin test_max bench_Runtime bench_StaticSC bench_StaticSCPin bench_StaticMaxGoto bench_StaticMaxGotoLTO bench_harness

@@ -80,9 +80,47 @@ The initial and final state of the CPU emulator is shown, along with the nanosec
 
 Generally the first cold run will have the least reliable timing, whereas the subsequent runs are closer together as other variances are reduced.
 
+## Benchmark Porting (from IntuitionEngine)
+
+This project includes a suite of 6502 benchmarks ported from [Zayn Otley's Intuition Engine](https://github.com/IntuitionAmiga/IntuitionEngine). These benchmarks provide a standardized workload to compare the performance of this C++ emulator against the original Go-based interpreter and JIT implementations.
+
+### Ported Workloads
+The following benchmark categories were extracted from the Intuition Engine's Go test suite:
+*   **ALU:** Register-heavy arithmetic operations (ADC, AND, EOR, etc.) in a tight counted loop.
+*   **Memory:** Zero-page load/store throughput testing memory bus efficiency.
+*   **Call:** JSR/RTS subroutine overhead, measuring block-exit and stack performance.
+*   **Branch:** Alternating taken/not-taken branch patterns to test pipeline/dispatch efficiency.
+*   **Mixed:** A complex interleaved workload of ALU, memory, stack, and branch operations.
+
+### Methodology
+To ensure an "apples-to-apples" comparison with Go's `testing.B` harness, our C++ `bench_harness` implements the same execution model:
+1.  **State Isolation:** All registers (`A`, `X`, `Y`, `SR`, `SP`) are reset using `softReset()` between every complete iteration of the benchmark loop.
+2.  **Duration-Based:** Each benchmark runs for a fixed 30-second window to gather statistically significant throughput data.
+3.  **MIPS Calculation:** Throughput is calculated as: `1.0e3 * total_instructions / nanoseconds`.
+
+### Running the Suite
+You can run the full cross-interpreter benchmark suite (comparing all internal C++ configurations) using the provided script:
+
+```bash
+cd src && ./run_benchmarks.sh
+```
+
+This will compile the harness for each interpreter variant and produce a consolidated performance table.
+
 ## Results
 
-From silicon to SixPhphive02 through to the four iterations of the C++ port.
+From silicon to SixPhphive02 through to the four iterations of the C++ port, and finally including benchmarks ported from [IntuitionEngine](https://github.com/IntuitionAmiga/IntuitionEngine).
+
+### Comparative Results (MIPS)
+
+The following performance table compares the C++ interpreter configurations (30-second benchmark runs):
+
+| Interpreter | ALU | Memory | Call | Branch | Mixed |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **StaticSC** | 470.15 | 522.70 | 542.20 | 526.37 | 513.39 |
+| **StaticSCPin** | 441.03 | 524.46 | 554.12 | 519.18 | 530.13 |
+| **StaticMaxGoto** | 485.92 | 547.57 | 563.17 | 540.01 | 582.84 |
+| **StaticMaxGotoLTO** | 474.39 | 538.06 | 595.17 | 563.53 | 566.76 |
 
 ![Linear performance](./img/perf.png)
 
@@ -199,10 +237,10 @@ Looking at the assembly language reminded me that _switch/case_ constructs are s
     - The address of a label can be taken into a variable, e.g. `uint8_t const* target = (uint8_t const*)&&some_label_to_goto_later;`
     - Invoking that is just `goto *target;`
     - The interesting thing is that you can use regular pointer arithmetic to get the code distance between two labels:
- 
+
         - Example, `size_t distance = ((uint8_t const*)&&later_label - (uint8_t const*)&&earlier_label);`
         - If the distances are certain to be small enough, you can use a narrower type.
- 
+
 - As the overall size of the executable was already around 32 KiB this got me thinking that I could construct an array of 16-bit offsets and this table would be half the size of the typical switch/case table.
 - Finally, the computed goto could be added at the end of each instruction handler to automatically determine where to go next, without branching backwards and forwards from the single dispatch location:
     - This approach is commonly known as _threaded dispatch_
@@ -442,7 +480,7 @@ For clarity, some tweaks are not shown here.
 - For x64, control flow checks are disabled using `-fcf-protection=none` which prevents the emission of a special branch target instruction:
     - Functionally equivalent to a nop, this is added at the beginning of each label which adds a slight overhead.
     - Normally this security feature is used to validate that the branch instruction has hit a legal destination, triggering a trap otherwise.
- 
+
 - All branch labels are aligned using `-falign-labels=16` which helps the CPU's fetch instruction mechanism when branching.
 
 ## Further Work
@@ -452,4 +490,3 @@ To improve the throughput further, pinning the program counter seems like an obv
 I also attempted a lazy-flags approach. For almost every instruction, the status register has to be updated which involves a fair amount of bitwise manipulation. Instead, I tried copying the result of the last operation to a local temporary that can be used to evaluate the N and V flags at the point where they first become necessary, i.e. on a conditional branch. This ultimately proved detrimental to performance but it might be the case that it can be revisited.
 
 Cycle exactness and known illegal instructions are desirable features to add if the emulator is ever going to be more than an educational exercise.
-
