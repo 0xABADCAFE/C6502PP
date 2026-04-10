@@ -32,12 +32,21 @@ You'll need a recentish GCC version, I have only tested with 11.4. I only write 
 :~/C6502PP/src$ make bench
 ```
 
-This should produce four binaries:
+This should produce the following binaries with and without link-time optimisations (LTO):
 
-- `test_runtime` - the most direct C++ port from the original PHP.
-- `test_sc` - initial conversion to compile-time abstraction.
-- `test_sc_pin` - experimenting with the pinning of the memory dependency reference.
-- `test_max` - conversion to threaded dispatch interpreter.
+- `test_runtime`, `test_runtime_lto`
+    - The most direct C++ port from the original PHP.
+    - Uses traditional runtime polymorphic approach to abstraction.
+    - Switch/case based insruction dispatch.
+   
+- `test_sc`, `test_sc_lto`
+    - Initial conversion to compile-time abstraction.
+   
+- `test_sc_pin`, `test_sc_pin_lto`
+    - Adds local variable pinning of the program counter and memory dependency reference.
+ 
+- `test_max`, `test_max_lto`
+    - Conversion of switch/case to computed goto based threaded dispatch.
 
 Each binary performs two tests:
 
@@ -55,10 +64,10 @@ A: 0x00 [   0]
 X: 0x00 [   0]
 Y: 0x00 [   0]
 F: [- - | - - - Z -]
-Ran 3276800000 0xEA insructions in 4339283764 nanoseconds [755.148 MIPS]
+Ran 3276800000 0xEA insructions in 1891107632 nanoseconds [1732.741 MIPS]
 Loaded data/rom/diagnostic/6502_functional_test.bin
 Beginning execution from 0x0400
-Klaus Test Passed! Ran 306480490 insructions in 495112154 nanoseconds [619.012 MIPS]
+Klaus Test Passed! Ran 306480490 insructions in 493651005 nanoseconds [620.844 MIPS]
 PC: 0x3469 => 0x4C
 SP: 0x01FF => 0x34
 A: 0xF0 [ -16]
@@ -66,21 +75,30 @@ X: 0x0E [  14]
 Y: 0xFF [  -1]
 F: [N V | - - - - C]
 
-real	0m4.888s
-user	0m4.887s
-sys	0m0.002s
+real	0m2.437s
+user	0m2.436s
+sys	0m0.000s
 ```
 
 The initial and final state of the CPU emulator is shown, along with the nanosecond timing and implied performance. For the most reliable results you should run in the absence of other processes, with a fixed CPU speed (e.g. performance mode) and chain three successive executions together, eg.
 
 ```bash
 :~/C6502PP/src$ ./test_max && ./test_max && ./test_max
-
 ```
-
 Generally the first cold run will have the least reliable timing, whereas the subsequent runs are closer together as other variances are reduced.
 
-## Benchmark Porting (from IntuitionEngine)
+## Simple Results
+From silicon to SixPhphive02 through to the four iterations of the C++ port, and finally including benchmarks ported from [IntuitionEngine](https://github.com/IntuitionAmiga/IntuitionEngine).
+
+### Peak Throughput and Klaus Dormann
+
+![Linear performance](./img/perf_linear.png)
+
+The only way to really appreciate gains that large is with a _logarithmic_ scale.
+
+![Log10 performance](./img/perf_log10.png)
+
+## IntutionEngine 6502 Benchmark Port
 
 This project includes a suite of 6502 benchmarks ported from [Zayn Otley's Intuition Engine](https://github.com/IntuitionAmiga/IntuitionEngine). These benchmarks provide a standardized workload to compare the performance of this C++ emulator against the original Go-based interpreter and JIT implementations.
 
@@ -114,11 +132,7 @@ cd src && BENCH_SECONDS=1 ./run_benchmarks.sh
 
 The script compiles the harness for each interpreter variant and prints a consolidated five-row performance table.
 
-## Results
-
-From silicon to SixPhphive02 through to the four iterations of the C++ port, and finally including benchmarks ported from [IntuitionEngine](https://github.com/IntuitionAmiga/IntuitionEngine).
-
-### Comparative Results (MIPS)
+### Intuition Comparative Results (MIPS)
 
 The following table is one sample local run of the current benchmark matrix. Exact numbers are machine- and duration-dependent, so treat it as an example rather than a canonical ranking.
 
@@ -131,12 +145,6 @@ The following table is one sample local run of the current benchmark matrix. Exa
 | **StaticMaxGotoLTO** | 314.16 | 395.62 | 391.00 | 418.27 | 353.68 |
 
 Numbers above were taken from a `BENCH_SECONDS=1` smoke run to keep the example quick to reproduce. Use the default 30-second duration for more stable comparisons.
-
-![Linear performance](./img/perf.png)
-
-The only way to really appreciate gains that large is with a _logarithmic_ scale.
-
-![Log10 performance](./img/perf_log10.png)
 
 ## A Journey
 
@@ -189,7 +197,7 @@ This was actually better than I expected and is significantly faster than the or
 
 It was an Easter weekend and I wanted to mess around with something nerdy but equally I didn't want the cognitive overhead of thinking _what_. So I thought I'd port SixPhphive02 to C++. This covers two of my favourite high level programming languagues.
 
-### Attempt 1
+### Attempt 1 : The Direct Port
 
 The first port was a like-for-like reimplementation. I didn't port everything, just the CPU, a basic _AbstractMemory_ with a concrete implementation for a basic array of 65536 bytes. This was given as a dependency on construction, just like the original PHP version. Everything else was basically identical:
 
@@ -199,12 +207,19 @@ The first port was a like-for-like reimplementation. I didn't port everything, j
 
 The same basic benchmarks were ran on the same hardware under the same conditions:
 
-- NOP peaked at **433.54 MIPS**
-- Klaus Dormann diagnostic achieved **185.16 MIPS**
+- NOP peaked at **433 MIPS**
+- Klaus Dormann diagnostic achieved **178 MIPS**
 
 This was already a massive **100x** speedup over SixPhphive02 for the simplest operation and a **60x** speed up more generally.
 
-### Attempt 2
+Turning on _Link Time Optimisation_ made an equally impressive difference.
+
+- NOP peaked at **641 MIPS**
+- Klaus Dormann diagnostic achieved **350 MIPS**
+
+When enabled, Link Time Optimisation defers the final round of optimisation to the linking stage, essentially allowing code that is properly isolated and encapsulated to be revealed, allowimg the compiler to identify the real concrete code hiding behind the abstraction and peel away some of the indirection. 
+
+### Attempt 2 : Static Shock
 
 I should've called it, but what I really wanted to do was to try _compile time_ abstraction. The next iteration changed things:
 
@@ -214,12 +229,15 @@ I should've called it, but what I really wanted to do was to try _compile time_ 
 
 The same benchmarks were repeated:
 
-- NOP peaked at **523.64 MIPS**
-- Klaus Dormann diagnostic achieved **294.75 MIPS**
+- NOP peaked at **523 MIPS**
+- Klaus Dormann diagnostic achieved **294 MIPS**
 
 This was definitely a result supporting the compile-time over runtime abstraction argument, giving a decent 20% improvement in the fastest NOP path and a whopping 60% improvement in general.
 
-### Attempt 3
+Turning on _Link Time Optimisation_ made very little difference, primarily becasue the indirection it is able to unravel does not exist in the statically abstracted code.
+
+
+### Attempt 3 : Put A Pin In It
 
 I wanted to validate my assumptions about what was going on in the code and inspected the assembly:
 
@@ -228,17 +246,15 @@ I wanted to validate my assumptions about what was going on in the code and insp
 
 That surprised me because being such a hot reference you'd expect it to get put into a register. So I thought I might try and _pin_ it. To do that, I created a local reference with the same name as the member and marked it as `__restrict__` which is a promise to the compiler that it won't change over the lifetime of the scope it's defined in. This should make it easier for the compiler to keep it in a register and avoid having to constantly reload it.
 
+Equally hot was the emulated program counter. This is loaded from, modified and written back to the CPU data structure in every handler. Some light refactoring and this was also moved to a local value for the duration of the interpreter loop.
+
 The same benchmarks were repeated:
 
-- NOP peaked at **569.16 MIPS**
-- Klaus Dormann diagnostic achieved **289.46 MIPS**
+- NOP peaked at **869 MIPS**
+- Klaus Dormann diagnostic achieved **371 MIPS**
 
-The peak NOP impact was pretty modest, 8.8% improvement. The corresponding 1.7% dip in the diagnostic performance was unexpected but completely repeatable.
 
-- The assumption was that allocating the reference into a register reduced the number of registers available elsewhere potentially slowing down some of the other operations.
-- Checking the generated assembler showed that the reference was indeed persisted in a register but it was not completely obvious which other instruction handlers had been impacted negatively.
-
-### Attempt 4
+### Attempt 4 : To Boldy Goto
 
 Looking at the assembly language reminded me that _switch/case_ constructs are sometimes just not as fast as people like to think. Since I was compiling for 64-bit, the compiler was generating a jump table with 32-bit displacements from the program counter. 256 entries, 4 bytes each (1KiB) and all funneling though a central dispatch location. So I decided to change that to use _computed goto_.
 
@@ -347,30 +363,42 @@ For the computed goto model, something rather different:
 
 All that said, only the numbers matter. The same benchmarks were repeated:
 
-- NOP peaked at **761.93 MIPS**
-- Klaus Dormann achived **452.20 MIPS**
+- NOP peaked at **1734 MIPS**
+- Klaus Dormann achived **621 MIPS**
 
 This was more like it. A 34% gain in the NOP path and a 56% gain for the general case.
 
 Putting it into perspective, **176.8x** faster than the original PHP SixPhphive02 in the simplest case and **147.3x** faster in the general case.
 
-**Anatomy of the final NOP handler:**
+**Eternal Noptimist: Anatomy of the final NOP handler:**
 
-Given all this, what does our minimal opcode fetch/execute/disatch code _actually_ look like?
+Given all this, what does our minimal opcode fetch/execute/disatch code _actually_ look like through this journey?
+
 
 ```asm
-   .L_133: // Handler for the NOP instruction
-    	movzwl	16(%r14), %eax      ; Read the program counter from the CPU structure.
-    	leal	1(%rax), %edx       ; Increment
-    	movw	%dx, 16(%r14)       ; Store it back again.
-    	movzwl	%dx, %edx           ; Dispatch:
-    	movzbl	(%rcx,%rdx), %edx   ;    Read the opcode at the new program counter
-    	movzwl	(%rdi,%rdx,2), %edx ;    Load the 16-bit displacement
-    	addq	%rsi, %rdx          ;    Add to the label base
-    	jmp	*%rdx                   ;    Off we go
+        // Handler for the NOP instruction
+        incl	%eax                ; Increment the pinned program counter
+        movzwl  %ax, %edx           ; Dispatch:
+        movzbl  (%rcx,%rdx), %edx   ;    Read the opcode at the new program counter location
+        movzwl  (%rdi,%rdx,2), %edx ;    Load the 16-bit jump offset
+        addq    %rsi, %rdx          ;    Add to the label base
+        jmp     *%rdx               ;    Off we go
+ 
 ```
 
-8 instructions, of which the last five are just the dispatch. The next most obvious optimisation would be to try and pin the program counter. This would shave off a load and store for every handler. Maybe one for next Easter.
+6 instructions, of which the last five are just the dispatch. Without pinning the program counter, the first instruction becomes a load/modify/store cycle that introduces stalls when called too quickly. This explains why pinning had such a dramatic impact.
+
+We can actually rig the NOP test by checking if the next opcode is NOP and keep incrementing until it isn't:
+
+```
+    handle(NOP) {
+        while(NOP == oOutside.readByte(iProgramCounter))
+            size(NOP);
+            dispatch();
+    }
+
+```
+- This brought the peak NOP result up to an eye watering **3055 MIPS** but as this completely circumvents the mechanism being tested, the changs is excluded from the codebase.
 
 ## Tidying Up
 

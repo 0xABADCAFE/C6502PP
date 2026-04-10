@@ -2,7 +2,7 @@
 
 # Configuration
 CC="g++"
-BENCH_SECONDS="${BENCH_SECONDS:-10}"
+BENCH_SECONDS="${BENCH_SECONDS:-1}"
 
 # Benchmark metadata: bin_file instr_per_op
 benchmarks=(
@@ -83,7 +83,7 @@ for name in "${interpreter_names[@]}"; do
     bra=${bra:-0.0}
     mix=$(grep "^$name,data/mixed_bench.bin," "$results_file" | cut -d',' -f3)
     mix=${mix:-0.0}
-    
+
     printf "%-18s | %12.2f | %12.2f | %12.2f | %12.2f | %12.2f\n" "$name" "$alu" "$mem" "$cal" "$bra" "$mix"
 done
 echo "=============================================================================================="
