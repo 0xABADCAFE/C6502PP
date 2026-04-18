@@ -50,7 +50,7 @@ func main() {
     tStart := time.Now()
     deadline := tStart.Add(time.Duration(seconds) * time.Second)
     for time.Now().Before(deadline) {
-        for i := 0; i < BATCH; i++ {
+        for range BATCH {
             cpu.RunFrom(LOAD_ADDR)
         }
         totalOps += BATCH
