@@ -5,7 +5,10 @@
 #
 # Rows covered:
 #   1. Eight C++ interpreters (BENCHMARK_TARGETS from benchmark_matrix.mk).
-#   2. Two cpp->Go interpreters from src/go/:
+#   2. Two cpp->Go interpreters built from G6502PP
+#      (https://github.com/IntuitionAmiga/G6502PP). $GOCPP_REPO selects the
+#      source: a URL is shallow-cloned + built per run, a local path is
+#      built in-place. CppGo_* rows are skipped when neither is reachable.
 #        - pinhot  (A, SR, PC and the outside-memory pointer pinned to locals)
 #        - pinall  (above plus X, Y and S pinned via -DPIN_ALL)
 #   3. Three rows from prebuilt Go testing.B binaries when present:
@@ -25,6 +28,9 @@
 #   BENCH_TIME     -test.benchtime for 6502_bench.test     (default: ${BENCH_SECONDS}s)
 #   BENCH_BIN        path to the Go testing.B bench binary       (default: ./6502_bench.test)
 #   BENCH_BIN_GOASM  path to the Goasm-linked variant             (default: ./6502_bench_goasm.test)
+#   GOCPP_REPO       URL or local G6502PP checkout. Local paths build in-place
+#                    (no git needed); URLs are shallow-cloned each run.
+#                                           (default: https://github.com/IntuitionAmiga/G6502PP)
 #   RAW              if set, also dump the raw testing.B output for both binaries
 
 set -eu
@@ -33,6 +39,8 @@ BENCH_SECONDS="${BENCH_SECONDS:-5}"
 BENCH_TIME="${BENCH_TIME:-${BENCH_SECONDS}s}"
 BENCH_BIN="${BENCH_BIN:-./6502_bench.test}"
 BENCH_BIN_GOASM="${BENCH_BIN_GOASM:-./6502_bench_goasm.test}"
+GOCPP_REPO="${GOCPP_REPO:-https://github.com/IntuitionAmiga/G6502PP}"
+gocpp_variants=(pinhot pinall)
 
 # Workload name, binary path, instructions executed per one run-to-JAM.
 # The instr/op numbers are defined by the .bin content and match the values
@@ -46,7 +54,12 @@ workloads=(
 )
 
 results_file=$(mktemp)
-cleanup() { rm -f "$results_file"; }
+gocpp_tmp=""      # build dir — either user's local checkout or a scratch clone
+gocpp_cleanup=""  # scratch dir to rm on exit; empty when we use a local path
+cleanup() {
+    rm -f "$results_file"
+    [ -n "$gocpp_cleanup" ] && rm -rf "$gocpp_cleanup"
+}
 trap cleanup EXIT
 
 run_one() {
@@ -86,22 +99,39 @@ for n in "${cpp_names[@]}"; do
     done
 done
 
-# --- Part 2: cpp->Go variants (optional; skipped if Go is absent) ------------
-gocpp_available=0
-if command -v go >/dev/null 2>&1; then
-    echo "==> Building + running cpp->Go interpreter variants"
-    if make -s -C go >/dev/null 2>&1; then
-        gocpp_available=1
-    else
-        echo "  ! cpp->Go build failed; skipping CppGo rows" >&2
-    fi
-else
+# --- Part 2: cpp->Go variants (local checkout or fresh clone each run) ------
+# Keep clone/make output visible: make -s silences only "Entering directory"
+# chatter, so the [vet]/[lint]/go-build per-variant progress streams through —
+# a 30s silent pause looks like a hang otherwise, and any real failure reason
+# goes to stderr where the user can see it.
+if ! command -v go >/dev/null 2>&1; then
     echo "==> Go toolchain not found; skipping cpp->Go interpreter variants"
+elif [ -d "$GOCPP_REPO" ]; then
+    # Local-path override: build in-place, no git needed. Offline-safe.
+    echo "==> Building cpp->Go interpreters from local $GOCPP_REPO"
+    if make -j -s -C "$GOCPP_REPO" "${gocpp_variants[@]}"; then
+        gocpp_tmp="$GOCPP_REPO"
+    else
+        echo "  ! cpp->Go build failed in $GOCPP_REPO; skipping CppGo rows" >&2
+    fi
+elif ! command -v git >/dev/null 2>&1; then
+    echo "==> git not found and GOCPP_REPO is not a local directory; skipping cpp->Go interpreter variants" >&2
+    echo "     set GOCPP_REPO=/path/to/local/G6502PP to build without git." >&2
+else
+    echo "==> Cloning + building cpp->Go interpreters from $GOCPP_REPO"
+    gocpp_cleanup=$(mktemp -d)
+    if git clone --depth=1 "$GOCPP_REPO" "$gocpp_cleanup" \
+       && make -j -s -C "$gocpp_cleanup" "${gocpp_variants[@]}"; then
+        gocpp_tmp="$gocpp_cleanup"
+    else
+        echo "  ! cpp->Go clone or build failed; skipping CppGo rows" >&2
+        echo "     if you are offline, point GOCPP_REPO at a local G6502PP checkout." >&2
+    fi
 fi
 
-if [ "$gocpp_available" -eq 1 ]; then
-    for variant in pinhot pinall; do
-        bin="go/bin/G65O2PP_$variant"
+if [ -n "$gocpp_tmp" ]; then
+    for variant in "${gocpp_variants[@]}"; do
+        bin="$gocpp_tmp/bin/G65O2PP_$variant"
         label="CppGo_$variant"
         if [ ! -x "$bin" ]; then
             echo "  ! missing $bin" >&2
@@ -179,8 +209,10 @@ fi
 
 # --- Table -------------------------------------------------------------------
 rows=( "${cpp_names[@]}" )
-if [ "$gocpp_available" -eq 1 ]; then
-    rows+=( "CppGo_pinhot" "CppGo_pinall" )
+if [ -n "$gocpp_tmp" ]; then
+    for variant in "${gocpp_variants[@]}"; do
+        rows+=( "CppGo_$variant" )
+    done
 fi
 if [ "$gobench_ran" -eq 1 ]; then
     rows+=( "IntuitionEngine_Interpreter" "IntuitionEngine_JIT" )
