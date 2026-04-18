@@ -1,0 +1,262 @@
+#!/bin/bash
+#
+# run_all_interpreters.sh - Benchmark every 6502 interpreter variant in this
+# tree against the same five workloads and print a single MIPS table.
+#
+# Rows covered:
+#   1. Eight C++ interpreters (BENCHMARK_TARGETS from benchmark_matrix.mk).
+#   2. Two cpp->Go interpreters built from G6502PP
+#      (https://github.com/IntuitionAmiga/G6502PP). $GOCPP_REPO selects the
+#      source: a URL is shallow-cloned + built per run, a local path is
+#      built in-place. CppGo_* rows are skipped when neither is reachable.
+#        - pinhot  (A, SR, PC and the outside-memory pointer pinned to locals)
+#        - pinall  (above plus X, Y and S pinned via -DPIN_ALL)
+#   3. Three rows from prebuilt Go testing.B binaries when present:
+#        - Interpreter + JIT      from src/6502_bench.test
+#        - Interpreter_goasm      from src/6502_bench_goasm.test (same
+#          bench suite, but the binary was linked with the Goasm-fused
+#          6502 interpreter enabled)
+#
+# All rows are normalized to the same instr_per_op counts so every cell is an
+# apples-to-apples MIPS figure.
+#
+# Run from src/:
+#   ./run_all_interpreters.sh
+#
+# Environment:
+#   BENCH_SECONDS  wall-clock seconds per C++ / Go-cpp cell (default: 5)
+#   BENCH_TIME     -test.benchtime for 6502_bench.test     (default: ${BENCH_SECONDS}s)
+#   BENCH_BIN        path to the Go testing.B bench binary       (default: ./6502_bench.test)
+#   BENCH_BIN_GOASM  path to the Goasm-linked variant             (default: ./6502_bench_goasm.test)
+#   GOCPP_REPO       URL or local G6502PP checkout. Local paths build in-place
+#                    (no git needed); URLs are shallow-cloned each run.
+#                                           (default: https://github.com/IntuitionAmiga/G6502PP)
+#   RAW              if set, also dump the raw testing.B output for both binaries
+
+set -eu
+
+BENCH_SECONDS="${BENCH_SECONDS:-5}"
+BENCH_TIME="${BENCH_TIME:-${BENCH_SECONDS}s}"
+BENCH_BIN="${BENCH_BIN:-./6502_bench.test}"
+BENCH_BIN_GOASM="${BENCH_BIN_GOASM:-./6502_bench_goasm.test}"
+GOCPP_REPO="${GOCPP_REPO:-https://github.com/IntuitionAmiga/G6502PP}"
+gocpp_variants=(pinhot pinall)
+
+# Workload name, binary path, instructions executed per one run-to-JAM.
+# The instr/op numbers are defined by the .bin content and match the values
+# reported by 6502_bench.test's Interpreter/JIT benchmarks.
+workloads=(
+    "ALU    data/alu_bench.bin    2306"
+    "Memory data/memory_bench.bin 1025"
+    "Call   data/call_bench.bin   1281"
+    "Branch data/branch_bench.bin 1537"
+    "Mixed  data/mixed_bench.bin  2050"
+)
+
+results_file=$(mktemp)
+gocpp_tmp=""      # build dir — either user's local checkout or a scratch clone
+gocpp_cleanup=""  # scratch dir to rm on exit; empty when we use a local path
+cleanup() {
+    rm -f "$results_file"
+    [ -n "$gocpp_cleanup" ] && rm -rf "$gocpp_cleanup"
+}
+trap cleanup EXIT
+
+run_one() {
+    local label=$1 bin=$2 wname=$3 wbin=$4 winstr=$5
+    local out mips
+    if ! out=$(timeout $((BENCH_SECONDS + 5))s "$bin" "$wbin" "$winstr" "$BENCH_SECONDS" 2>&1); then
+        echo "  ! $label failed on $wbin: $out" >&2
+        printf '%s,%s,0.0\n' "$label" "$wname" >> "$results_file"
+        return
+    fi
+    mips=$(printf '%s\n' "$out" | grep -oP '\[\K[0-9.]+(?= MIPS\])')
+    printf '%s,%s,%s\n' "$label" "$wname" "${mips:-0.0}" >> "$results_file"
+}
+
+# --- Part 1: 8 C++ bench harnesses -------------------------------------------
+echo "==> Building + running C++ interpreter matrix"
+mapfile -t configs < <(make -s print_benchmark_configs)
+cpp_names=()
+declare -A cfg_flags cfg_ldflags
+for c in "${configs[@]}"; do
+    IFS='|' read -r n f l <<< "$c"
+    cpp_names+=("$n")
+    cfg_flags[$n]=$f
+    cfg_ldflags[$n]=$l
+done
+
+for n in "${cpp_names[@]}"; do
+    echo "  [C++] $n"
+    if ! make -s build_bench BIN_NAME="bench_$n" FLAGS="${cfg_flags[$n]}" LDFLAGS="${cfg_ldflags[$n]}" >/dev/null 2>&1; then
+        echo "  ! compile failed: $n" >&2
+        continue
+    fi
+    for w in "${workloads[@]}"; do
+        # shellcheck disable=SC2086
+        set -- $w
+        run_one "$n" "./bench_$n" "$1" "$2" "$3"
+    done
+done
+
+# --- Part 2: cpp->Go variants (local checkout or fresh clone each run) ------
+# Keep clone/make output visible: make -s silences only "Entering directory"
+# chatter, so the [vet]/[lint]/go-build per-variant progress streams through —
+# a 30s silent pause looks like a hang otherwise, and any real failure reason
+# goes to stderr where the user can see it.
+if ! command -v go >/dev/null 2>&1; then
+    echo "==> Go toolchain not found; skipping cpp->Go interpreter variants"
+elif [ -d "$GOCPP_REPO" ]; then
+    # Local-path override: build in-place, no git needed. Offline-safe.
+    echo "==> Building cpp->Go interpreters from local $GOCPP_REPO"
+    if make -j -s -C "$GOCPP_REPO" "${gocpp_variants[@]}"; then
+        gocpp_tmp="$GOCPP_REPO"
+    else
+        echo "  ! cpp->Go build failed in $GOCPP_REPO; skipping CppGo rows" >&2
+    fi
+elif ! command -v git >/dev/null 2>&1; then
+    echo "==> git not found and GOCPP_REPO is not a local directory; skipping cpp->Go interpreter variants" >&2
+    echo "     set GOCPP_REPO=/path/to/local/G6502PP to build without git." >&2
+else
+    echo "==> Cloning + building cpp->Go interpreters from $GOCPP_REPO"
+    gocpp_cleanup=$(mktemp -d)
+    if git clone --depth=1 "$GOCPP_REPO" "$gocpp_cleanup" \
+       && make -j -s -C "$gocpp_cleanup" "${gocpp_variants[@]}"; then
+        gocpp_tmp="$gocpp_cleanup"
+    else
+        echo "  ! cpp->Go clone or build failed; skipping CppGo rows" >&2
+        echo "     if you are offline, point GOCPP_REPO at a local G6502PP checkout." >&2
+    fi
+fi
+
+if [ -n "$gocpp_tmp" ]; then
+    for variant in "${gocpp_variants[@]}"; do
+        bin="$gocpp_tmp/bin/G65O2PP_$variant"
+        label="CppGo_$variant"
+        if [ ! -x "$bin" ]; then
+            echo "  ! missing $bin" >&2
+            continue
+        fi
+        echo "  [Go/cpp] $label"
+        for w in "${workloads[@]}"; do
+            # shellcheck disable=SC2086
+            set -- $w
+            run_one "$label" "$bin" "$1" "$2" "$3"
+        done
+    done
+fi
+
+# --- Part 3: prebuilt Go testing.B bench binaries -----------------------------
+# run_gobench <binary> <bench-regex> <interpreter-suffix>
+#   runs the given testing.B binary restricted to <bench-regex>, and labels
+#   parsed Interpreter rows as IntuitionEngine_Interpreter<suffix>. JIT rows
+#   are always labeled IntuitionEngine_JIT (the JIT path is the same codegen
+#   in both binaries, so we only want one set).
+run_gobench() {
+    local bin=$1 pattern=$2 suffix=$3
+    local out
+    if ! out=$("$bin" \
+            -test.run '^$' \
+            -test.bench "$pattern" \
+            -test.benchtime "$BENCH_TIME" \
+            -test.count 1 \
+            -test.benchmem 2>&1); then
+        echo "  ! $bin failed; corresponding IntuitionEngine rows will be empty" >&2
+        return 1
+    fi
+    [ -n "${RAW:-}" ] && { echo "--- raw $bin output ---"; echo "$out"; echo; }
+    printf '%s\n' "$out" | awk -v F="$results_file" -v SUF="$suffix" '
+        /^Benchmark6502_/ {
+            name = $1; sub(/-[0-9]+$/, "", name)
+            if (!match(name, /_(ALU|Memory|Call|Branch|Mixed)_(Interpreter|JIT)$/)) next
+            pair = substr(name, RSTART+1, RLENGTH-1)
+            split(pair, p, "_")
+            ns = 0; ip = 0
+            for (i = 2; i <= NF; i++) {
+                if ($i == "ns/op"           && i > 2) ns = $(i-1) + 0
+                if ($i == "instructions/op" && i > 2) ip = $(i-1) + 0
+            }
+            if (ns > 0 && ip > 0) {
+                mips = ip / ns * 1000.0
+                label = (p[2] == "Interpreter") ? "Interpreter" SUF : p[2]
+                printf "IntuitionEngine_%s,%s,%.2f\n", label, p[1], mips >> F
+            }
+        }'
+    return 0
+}
+
+gobench_ran=0
+if [ -x "$BENCH_BIN" ]; then
+    echo "==> Running $BENCH_BIN (Interpreter + JIT rows)"
+    run_gobench "$BENCH_BIN" \
+        'Benchmark6502_(ALU|Memory|Call|Branch|Mixed)_(Interpreter|JIT)' \
+        "" \
+        && gobench_ran=1
+else
+    echo "==> Skipping $BENCH_BIN (not found or not executable)"
+fi
+
+goasm_ran=0
+if [ -x "$BENCH_BIN_GOASM" ]; then
+    echo "==> Running $BENCH_BIN_GOASM (Interpreter_goasm row)"
+    run_gobench "$BENCH_BIN_GOASM" \
+        'Benchmark6502_(ALU|Memory|Call|Branch|Mixed)_Interpreter' \
+        "_goasm" \
+        && goasm_ran=1
+else
+    echo "==> Skipping $BENCH_BIN_GOASM (not found or not executable)"
+fi
+
+# --- Table -------------------------------------------------------------------
+rows=( "${cpp_names[@]}" )
+if [ -n "$gocpp_tmp" ]; then
+    for variant in "${gocpp_variants[@]}"; do
+        rows+=( "CppGo_$variant" )
+    done
+fi
+if [ "$gobench_ran" -eq 1 ]; then
+    rows+=( "IntuitionEngine_Interpreter" "IntuitionEngine_JIT" )
+fi
+if [ "$goasm_ran" -eq 1 ]; then
+    rows+=( "IntuitionEngine_Interpreter_goasm" )
+fi
+cols=(ALU Memory Call Branch Mixed)
+
+# Load all results into an associative array once; later-written rows win.
+declare -A results
+while IFS=, read -r r c v; do
+    results[$r,$c]=$v
+done < "$results_file"
+
+# Sort rows ascending by Mixed-column MIPS so the current fastest is at the bottom.
+sorted_rows=()
+while IFS=$'\t' read -r _ r; do
+    [ -n "$r" ] && sorted_rows+=("$r")
+done < <(for r in "${rows[@]}"; do
+    printf '%s\t%s\n' "${results[$r,Mixed]:-0}" "$r"
+done | sort -k1,1n)
+
+LABEL_W=34
+printf -v bar '%99s' ''; bar=${bar// /=}
+printf -v dashes "%${LABEL_W}s" ''; dashes=${dashes// /-}
+echo
+echo "$bar"
+printf '%*s\n' 70 "UNIFIED 6502 INTERPRETER BENCHMARK (MIPS)"
+printf '%*s\n' 77 "(rows sorted ascending by Mixed column; fastest at bottom)"
+echo "$bar"
+printf "%-${LABEL_W}s" "Interpreter"
+for c in "${cols[@]}"; do printf " | %10s" "$c"; done
+printf "\n"
+printf '%s' "$dashes"
+for c in "${cols[@]}"; do printf '%s' "-+-----------"; done
+printf "\n"
+for r in "${sorted_rows[@]}"; do
+    printf "%-${LABEL_W}s" "$r"
+    for c in "${cols[@]}"; do
+        printf " | %10.2f" "${results[$r,$c]:-0.0}"
+    done
+    printf "\n"
+done
+echo "$bar"
+
+rm -f $(printf 'bench_%s ' "${cpp_names[@]}")
